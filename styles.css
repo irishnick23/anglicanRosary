@@ -1,6 +1,14 @@
 @font-face {
   font-family: "Geist";
   src: url("./assets/fonts/geist-latin-400-normal.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("./assets/fonts/geist-latin-400-normal.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -15,10 +23,13 @@
 }
 
 :root {
-  --bg: #000;
-  --fg: #fff;
-  --muted: rgba(255, 255, 255, 0.62);
-  --line: rgba(255, 255, 255, 0.3);
+  --bg: #000000;
+  --fg: #d4d4d8;
+  --muted: #71717a;
+  --focus-core: #e4e4e7;
+  --line: rgba(228, 228, 231, 0.3);
+  --ghost-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --focus-max-width: 44rem;
 }
 
 * {
@@ -32,7 +43,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  line-height: 1.5;
+  line-height: 1.8;
 }
 
 button {
@@ -50,7 +61,7 @@ button {
 
 .screen {
   position: relative;
-  width: min(100%, 44rem);
+  width: min(100%, var(--focus-max-width));
   min-height: 90dvh;
   display: flex;
   flex-direction: column;
@@ -58,6 +69,9 @@ button {
   align-items: center;
   gap: 1rem;
   text-align: center;
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
 }
 
 .screen--prayer {
@@ -81,8 +95,18 @@ button {
   place-items: center;
 }
 
+.load-cloud__aura {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(212, 212, 216, 0.4);
+  opacity: 0.38;
+  transform: scale(1);
+}
+
 .load-cloud__canvas {
   position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   display: block;
@@ -92,7 +116,8 @@ button {
 .title {
   margin: 0;
   font-size: clamp(1.35rem, 4vw, 1.95rem);
-  font-weight: 500;
+  font-weight: 400;
+  letter-spacing: 0.05em;
 }
 
 .btn {
@@ -106,20 +131,20 @@ button {
 }
 
 .btn:hover {
-  border-color: rgba(255, 255, 255, 0.75);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(228, 228, 231, 0.75);
+  background: rgba(228, 228, 231, 0.08);
 }
 
 .btn:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline: 2px solid rgba(228, 228, 231, 0.85);
   outline-offset: 2px;
-  border-color: rgba(255, 255, 255, 0.75);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(228, 228, 231, 0.75);
+  background: rgba(228, 228, 231, 0.08);
 }
 
 .btn:active {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(228, 228, 231, 0.12);
+  border-color: rgba(228, 228, 231, 0.85);
   transition-duration: 0ms;
 }
 
@@ -138,14 +163,17 @@ button {
 .prayer-title {
   margin: 0;
   font-size: clamp(1.2rem, 3.3vw, 1.65rem);
-  font-weight: 500;
+  font-weight: 400;
+  letter-spacing: 0.05em;
 }
 
 .prayer-text {
   margin: 0;
   font-size: clamp(1.02rem, 2.6vw, 1.25rem);
-  line-height: 1.78;
+  line-height: 1.8;
+  letter-spacing: 0.05em;
   white-space: pre-line;
+  font-weight: 300;
 }
 
 .prayer-main {
@@ -161,11 +189,174 @@ button {
   justify-content: center;
 }
 
-.timer {
+.next-shell {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
+.next-shell--visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition:
+    opacity 1500ms ease-in-out,
+    transform 1800ms var(--ghost-ease);
+}
+
+.prayer-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.vr-line {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.875rem;
-  letter-spacing: 0.02em;
+  transition:
+    opacity 1500ms ease-in-out,
+    filter 1500ms ease-in-out,
+    transform 1800ms var(--ghost-ease);
+}
+
+.vr-line--versicle-active {
+  opacity: 1;
+}
+
+.vr-line--versicle-dimmed {
+  opacity: 0.3;
+}
+
+.vr-line--response-hidden {
+  opacity: 0;
+  filter: blur(10px);
+}
+
+.vr-line--response-visible {
+  opacity: 1;
+  filter: blur(0);
+  transform: translateY(0);
+}
+
+.stanza-wrap {
+  position: relative;
+  min-height: 11rem;
+  display: grid;
+  align-content: center;
+}
+
+.stanza {
+  margin: 0;
+  animation: stanza-enter 1800ms var(--ghost-ease) both;
+}
+
+.bead-arc {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.42rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.bead {
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--focus-core);
+  opacity: 0.3;
+  transition: opacity 1500ms ease-in-out;
+}
+
+.bead:nth-child(1),
+.bead:nth-child(7) {
+  transform: translateY(5px);
+}
+
+.bead:nth-child(2),
+.bead:nth-child(6) {
+  transform: translateY(3px);
+}
+
+.bead:nth-child(3),
+.bead:nth-child(5) {
+  transform: translateY(1px);
+}
+
+.bead--active {
+  opacity: 1;
+  box-shadow: 0 0 0.7rem rgba(228, 228, 231, 0.55);
+  filter: blur(0.2px);
+}
+
+.screen--leaving {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition:
+    opacity 1200ms ease-in-out,
+    transform 1200ms var(--ghost-ease);
+}
+
+.screen--entering {
+  opacity: 0;
+  transform: translateY(20px);
+  filter: blur(10px);
+}
+
+.screen--entered {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition:
+    opacity 1500ms ease-in-out,
+    transform 1500ms var(--ghost-ease),
+    filter 1500ms ease-in-out;
+}
+
+.finale-screen {
+  overflow: hidden;
+}
+
+.finale-screen .load-cloud {
+  width: clamp(14rem, 72vw, 28rem);
+  animation: finale-cloud 2200ms var(--ghost-ease) forwards;
+}
+
+.finale-screen .load-cloud__canvas {
+  animation: finale-fade 2200ms ease-in-out forwards;
+}
+
+@keyframes stanza-enter {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes finale-cloud {
+  0% {
+    transform: scale(1);
+  }
+  65% {
+    transform: scale(1.28);
+  }
+  100% {
+    transform: scale(1.34);
+  }
+}
+
+@keyframes finale-fade {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 .dev-zone {
@@ -187,5 +378,20 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .btn {
     transition: none;
+  }
+
+  .screen--leaving,
+  .screen--entering,
+  .screen--entered,
+  .vr-line,
+  .next-shell--visible,
+  .stanza,
+  .finale-screen .load-cloud,
+  .finale-screen .load-cloud__canvas,
+  .bead {
+    transition: none;
+    animation: none;
+    transform: none;
+    filter: none;
   }
 }

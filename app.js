@@ -1,10 +1,22 @@
 const APP = document.getElementById("app");
 
-const SESSION_KEY = "anglican_rosary_session_v1";
+const SESSION_KEY = "anglican_rosary_session_v2";
 const SESSION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_LOAD_MS = 7140;
 const DEV_RESET_ENABLED = true;
 const DEV_GESTURE_TAP_TARGET = 5;
+
+const DUR_BREATH_CYCLE = 10000;
+const DUR_BREATH_INHALE = 4000;
+const DUR_BREATH_HOLD = 1000;
+const DUR_BREATH_EXHALE = 5000;
+const DUR_GHOST_EXIT_MS = 1200;
+const DUR_GHOST_ENTER_MS = 1500;
+const DUR_REVEAL_NEXT_DELAY_MS = 2000;
+const DUR_FINALE_MS = 2200;
+const TRANSITION_GHOST = "1500ms cubic-bezier(0.22, 1, 0.36, 1)";
+const COLOR_MOONLIGHT = "#D4D4D8";
+const COLOR_FOCUS_CORE = "#E4E4E7";
 
 const APOSTLES_CREED =
   "I believe in God, the Father Almighty, the maker of heaven and earth: and in Jesus Christ his only Son our Lord: who was conceived by the Holy Ghost, born of the Virgin Mary: suffered under Pontius Pilate, was crucified, dead, and buried: he descended into hell; the third day he rose again from the dead: he ascended into heaven, and sitteth on the right hand of God the Father Almighty: from thence he shall come to judge the quick and the dead. I believe in the Holy Ghost: the holy catholic church; the communion of saints: the forgiveness of sins: the resurrection of the body, and the life everlasting. Amen.";
@@ -18,6 +30,26 @@ const LORDS_PRAYER =
 const INVOCATION =
   "O God the Son, Redeemer of the world: have mercy upon us miserable sinners.";
 
+const STANZAS_PER_PRAYER = {
+  creed: [
+    "I believe in God, the Father Almighty,\nthe maker of heaven and earth:",
+    "And in Jesus Christ his only Son our Lord:\nwho was conceived by the Holy Ghost,\nborn of the Virgin Mary:",
+    "Suffered under Pontius Pilate,\nwas crucified, dead, and buried:\nhe descended into hell;",
+    "The third day he rose again from the dead:\nhe ascended into heaven,\nand sitteth on the right hand of God the Father Almighty:",
+    "From thence he shall come\nto judge the quick and the dead.",
+    "I believe in the Holy Ghost:\nthe holy catholic church;\nthe communion of saints:",
+    "The forgiveness of sins:\nthe resurrection of the body,\nand the life everlasting. Amen.",
+  ],
+  lords_prayer: [
+    "Our Father which art in heaven,\nhallowed be thy name.",
+    "Thy kingdom come,\nthy will be done in earth,\nas it is in heaven.",
+    "Give us this day our daily bread.",
+    "And forgive us our trespasses,\nas we forgive them that trespass against us.",
+    "And lead us not into temptation,\nbut deliver us from evil:",
+    "For thine is the kingdom,\nand the power, and the glory,\nfor ever and ever. Amen.",
+  ],
+};
+
 const MYSTERIES = [
   "By the mystery of thy holy incarnation;",
   "By thy holy nativity and circumcision;",
@@ -27,27 +59,104 @@ const MYSTERIES = [
 
 let flowNodes = [];
 let flowVersion = "";
-let session = {
-  status: "start",
-  nodeIndex: -1,
-  startedAtEpochMs: null,
-  updatedAtEpochMs: null,
-  activeRoundId: null,
-};
+let session = createBaseSession();
 
 let loadTimerId = null;
-let loadCountdownId = null;
 let expiryWatcherId = null;
 let stopLoadAnimation = null;
+let revealReadyTimerId = null;
+let finaleTimerId = null;
+let renderTransitionId = 0;
 let devLeftTapCount = 0;
 let devRightTapCount = 0;
+
+const breathEase = createBezierEasing(0.445, 0.05, 0.55, 0.95);
+const moonlightRgb = hexToRgb(COLOR_MOONLIGHT);
+const focusCoreRgb = hexToRgb(COLOR_FOCUS_CORE);
+
+function createBaseSession() {
+  return {
+    status: "start",
+    nodeIndex: -1,
+    startedAtEpochMs: null,
+    updatedAtEpochMs: null,
+    activeRoundId: null,
+    nodeProgress: {},
+  };
+}
 
 function uid() {
   return `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 }
 
-function formatSeconds(ms) {
-  return Math.ceil(ms / 1000);
+function createBezierEasing(x1, y1, x2, y2) {
+  const cx = 3 * x1;
+  const bx = 3 * (x2 - x1) - cx;
+  const ax = 1 - cx - bx;
+  const cy = 3 * y1;
+  const by = 3 * (y2 - y1) - cy;
+  const ay = 1 - cy - by;
+
+  function sampleCurveX(t) {
+    return ((ax * t + bx) * t + cx) * t;
+  }
+
+  function sampleCurveY(t) {
+    return ((ay * t + by) * t + cy) * t;
+  }
+
+  function sampleCurveDerivativeX(t) {
+    return (3 * ax * t + 2 * bx) * t + cx;
+  }
+
+  function solveCurveX(x) {
+    let t = x;
+    for (let i = 0; i < 8; i += 1) {
+      const x2 = sampleCurveX(t) - x;
+      if (Math.abs(x2) < 1e-6) {
+        return t;
+      }
+      const d2 = sampleCurveDerivativeX(t);
+      if (Math.abs(d2) < 1e-6) {
+        break;
+      }
+      t -= x2 / d2;
+    }
+
+    let t0 = 0;
+    let t1 = 1;
+    t = x;
+    while (t0 < t1) {
+      const x2 = sampleCurveX(t);
+      if (Math.abs(x2 - x) < 1e-6) {
+        return t;
+      }
+      if (x > x2) t0 = t;
+      else t1 = t;
+      t = (t1 - t0) * 0.5 + t0;
+    }
+    return t;
+  }
+
+  return (x) => {
+    const xClamped = Math.max(0, Math.min(1, x));
+    return sampleCurveY(solveCurveX(xClamped));
+  };
+}
+
+function hexToRgb(hex) {
+  const clean = String(hex).replace("#", "");
+  if (clean.length !== 6) {
+    return "255, 255, 255";
+  }
+  const r = Number.parseInt(clean.slice(0, 2), 16);
+  const g = Number.parseInt(clean.slice(2, 4), 16);
+  const b = Number.parseInt(clean.slice(4, 6), 16);
+  return `${r}, ${g}, ${b}`;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function devGestureZonesMarkup() {
@@ -61,8 +170,8 @@ function devGestureZonesMarkup() {
   `;
 }
 
-function prayerNode(kind, title, text, meta) {
-  return { type: "prayer", kind, title, text, meta };
+function prayerNode(kind, title, text, meta, extra = {}) {
+  return { type: "prayer", kind, title, text, meta, ...extra };
 }
 
 function loadNode(durationMs) {
@@ -91,22 +200,15 @@ function buildPrayerSequence() {
       ),
     );
     prayers.push(
-      prayerNode(
-        "mystery",
-        `Mystery ${setNumber}`,
-        mystery,
-        `Set ${setNumber}`,
-      ),
+      prayerNode("mystery", `Mystery ${setNumber}`, mystery, `Set ${setNumber}`),
     );
 
     for (let i = 1; i <= 7; i += 1) {
       prayers.push(
-        prayerNode(
-          "invocation",
-          `Invocation ${i} of 7`,
-          INVOCATION,
-          `Set ${setNumber}`,
-        ),
+        prayerNode("invocation", "Invocation", INVOCATION, `Set ${setNumber}`, {
+          invocationIndex: i,
+          invocationTotal: 7,
+        }),
       );
     }
   });
@@ -149,7 +251,7 @@ function buildFlowTimeline() {
 }
 
 function computeFlowVersion() {
-  return `flow-${MYSTERIES.length}-${buildPrayerSequence().length}`;
+  return `flow-v2-${MYSTERIES.length}-${buildPrayerSequence().length}`;
 }
 
 function focusPrimary(id) {
@@ -165,9 +267,13 @@ function clearTimers() {
     window.clearTimeout(loadTimerId);
     loadTimerId = null;
   }
-  if (loadCountdownId) {
-    window.clearInterval(loadCountdownId);
-    loadCountdownId = null;
+  if (revealReadyTimerId) {
+    window.clearTimeout(revealReadyTimerId);
+    revealReadyTimerId = null;
+  }
+  if (finaleTimerId) {
+    window.clearTimeout(finaleTimerId);
+    finaleTimerId = null;
   }
 }
 
@@ -178,10 +284,29 @@ function stopLoadVisual() {
   stopLoadAnimation = null;
 }
 
-function startLoadVisual(canvas, cycleMs = 5000) {
+function getBreathAmount(nowMs) {
+  const phaseMs = nowMs % DUR_BREATH_CYCLE;
+  if (phaseMs <= DUR_BREATH_INHALE) {
+    return breathEase(phaseMs / DUR_BREATH_INHALE);
+  }
+  if (phaseMs <= DUR_BREATH_INHALE + DUR_BREATH_HOLD) {
+    return 1;
+  }
+  const exhaleProgress =
+    (phaseMs - DUR_BREATH_INHALE - DUR_BREATH_HOLD) / DUR_BREATH_EXHALE;
+  return 1 - breathEase(exhaleProgress);
+}
+
+function startLoadVisual(canvas, options = {}) {
   if (!(canvas instanceof HTMLCanvasElement)) return () => {};
   const ctx = canvas.getContext("2d");
   if (!ctx) return () => {};
+
+  const {
+    showTrace = false,
+    traceDurationMs = DEFAULT_LOAD_MS,
+    traceStartEpochMs = Date.now(),
+  } = options;
 
   const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   let width = 0;
@@ -215,30 +340,43 @@ function startLoadVisual(canvas, cycleMs = 5000) {
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    particles = Array.from({ length: 6500 }, createParticle);
+  }
 
-    const total = 6500;
-    particles = Array.from({ length: total }, createParticle);
+  function drawTrace(cx, cy, radius, breath) {
+    if (!showTrace || traceDurationMs <= 0) return;
+    const elapsed = Date.now() - traceStartEpochMs;
+    const progress = Math.max(0, Math.min(1, elapsed / traceDurationMs));
+    if (progress <= 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.beginPath();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(${moonlightRgb}, ${0.14 + breath * 0.08})`;
+    ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawCloud(now) {
     if (!width || !height) return;
-
     ctx.clearRect(0, 0, width, height);
 
     const cx = width / 2;
     const cy = height / 2;
     const minSide = Math.min(width, height);
+    const breath = getBreathAmount(now);
+    const baseRadius = minSide * 0.35;
+    const currentRadius = baseRadius * (1 + breath * 0.2);
+    const cloudAlpha = 0.6 + breath * 0.3;
 
-    const pulseCycleMs = Math.max(1, cycleMs);
-    const breathPhase = (now % pulseCycleMs) / pulseCycleMs;
-    const breath = 0.5 - 0.5 * Math.cos(breathPhase * Math.PI * 2);
-    const baseRadius = minSide * 0.42;
-    const currentRadius = baseRadius * (0.9 + breath * 0.2);
+    drawTrace(cx, cy, baseRadius * 1.08, breath);
 
     ctx.globalCompositeOperation = "lighter";
     for (let i = 0; i < particles.length; i += 1) {
       const particle = particles[i];
-      const currentTheta = particle.theta + now * particle.speed + particle.phase * 0.08;
+      const currentTheta =
+        particle.theta + now * particle.speed + particle.phase * 0.08;
       const x = Math.cos(currentTheta) * particle.r;
       const y = Math.sin(currentTheta) * particle.r * 0.4;
       const z = particle.tilt * particle.r;
@@ -250,24 +388,23 @@ function startLoadVisual(canvas, cycleMs = 5000) {
 
       const screenX = cx + xRot * currentRadius;
       const screenY = cy + y * currentRadius;
-
       const coreBias = 1.1 - particle.r;
-      const alpha = coreBias * (0.1 + breath * 0.45) * ((zRot + 1) / 2);
+      const alpha = coreBias * cloudAlpha * 0.3 * ((zRot + 1) / 2);
 
       if (particle.size > 1) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+        ctx.fillStyle = `rgba(${focusCoreRgb}, ${alpha})`;
         ctx.beginPath();
         ctx.arc(screenX, screenY, particle.size, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
+        ctx.fillStyle = `rgba(${focusCoreRgb}, ${alpha * 0.65})`;
         ctx.fillRect(screenX, screenY, 1, 1);
       }
     }
 
-    const nucleus = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseRadius * 0.3);
-    nucleus.addColorStop(0, `rgba(255, 255, 255, ${0.15 + breath * 0.15})`);
-    nucleus.addColorStop(1, "rgba(255, 255, 255, 0)");
+    const nucleus = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseRadius * 0.35);
+    nucleus.addColorStop(0, `rgba(${focusCoreRgb}, ${0.18 + breath * 0.2})`);
+    nucleus.addColorStop(1, `rgba(${focusCoreRgb}, 0)`);
     ctx.fillStyle = nucleus;
     ctx.fillRect(0, 0, width, height);
 
@@ -354,16 +491,14 @@ function persistSession() {
   );
 }
 
+function resetSessionData() {
+  session = createBaseSession();
+  window.localStorage.removeItem(SESSION_KEY);
+}
+
 function resetToStart() {
   clearTimers();
-  session = {
-    status: "start",
-    nodeIndex: -1,
-    startedAtEpochMs: null,
-    updatedAtEpochMs: null,
-    activeRoundId: null,
-  };
-  window.localStorage.removeItem(SESSION_KEY);
+  resetSessionData();
   render();
 }
 
@@ -374,14 +509,111 @@ function isExpired(startedAtEpochMs) {
   return Date.now() - startedAtEpochMs >= SESSION_MAX_AGE_MS;
 }
 
+function getNodeProgressKey(index) {
+  return String(index);
+}
+
+function parseVRPairs(text) {
+  const lines = String(text)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const pairs = [];
+  for (let i = 0; i < lines.length; i += 2) {
+    const versicle = lines[i] ?? "";
+    const response = lines[i + 1] ?? "";
+    pairs.push({ versicle, response });
+  }
+  return pairs;
+}
+
+function defaultProgressForNode(node) {
+  if (node.kind === "invitatory") {
+    return {
+      mode: "vr",
+      pairIndex: 0,
+      phase: "await_response",
+      nextVisibleAtEpochMs: null,
+    };
+  }
+  if (node.kind === "creed" || node.kind === "lords_prayer") {
+    return {
+      mode: "stanza",
+      stanzaIndex: 0,
+      nextVisibleAtEpochMs: null,
+    };
+  }
+  return {
+    mode: "default",
+    nextVisibleAtEpochMs: null,
+  };
+}
+
+function getNodeProgress(nodeIndex, node) {
+  const key = getNodeProgressKey(nodeIndex);
+  if (!session.nodeProgress[key]) {
+    session.nodeProgress[key] = defaultProgressForNode(node);
+  }
+  return session.nodeProgress[key];
+}
+
+function isNextVisible(progress) {
+  if (!progress.nextVisibleAtEpochMs) return true;
+  return Date.now() >= progress.nextVisibleAtEpochMs;
+}
+
+function ensureRevealTimer(progress) {
+  if (!progress.nextVisibleAtEpochMs || isNextVisible(progress) || revealReadyTimerId) {
+    return;
+  }
+  const waitMs = Math.max(0, progress.nextVisibleAtEpochMs - Date.now());
+  revealReadyTimerId = window.setTimeout(() => {
+    revealReadyTimerId = null;
+    render();
+  }, waitMs);
+}
+
+function triggerNativeBeadHaptic() {
+  try {
+    const webkitBridge = window.webkit?.messageHandlers?.hapticImpact;
+    if (webkitBridge && typeof webkitBridge.postMessage === "function") {
+      webkitBridge.postMessage({ style: "light" });
+      return;
+    }
+
+    const capacitorImpact = window.Capacitor?.Plugins?.Haptics?.impact;
+    if (typeof capacitorImpact === "function") {
+      capacitorImpact({ style: "LIGHT" });
+      return;
+    }
+
+    const reactNativeBridge = window.ReactNativeWebView?.postMessage;
+    if (typeof reactNativeBridge === "function") {
+      reactNativeBridge(JSON.stringify({ type: "haptic", style: "light" }));
+      return;
+    }
+
+    if (typeof window.NativeHaptics?.impactLight === "function") {
+      window.NativeHaptics.impactLight();
+    }
+  } catch (_error) {
+    // Keep silence when no high-fidelity native haptic bridge is available.
+  }
+}
+
 function advanceFromPrayer() {
   if (session.status !== "in_progress") {
     return;
   }
 
+  const node = flowNodes[session.nodeIndex];
+  if (node?.type === "prayer" && node.kind === "invocation") {
+    triggerNativeBeadHaptic();
+  }
+
   session.nodeIndex += 1;
   if (session.nodeIndex >= flowNodes.length) {
-    resetToStart();
+    playConclusionThenReset();
     return;
   }
 
@@ -397,7 +629,7 @@ function advanceForTesting() {
 
   session.nodeIndex += 1;
   if (session.nodeIndex >= flowNodes.length) {
-    resetToStart();
+    playConclusionThenReset();
     return;
   }
 
@@ -427,6 +659,7 @@ function registerDevTap(side) {
 function startRound() {
   clearTimers();
   session = {
+    ...createBaseSession(),
     status: "in_progress",
     nodeIndex: 0,
     startedAtEpochMs: Date.now(),
@@ -461,15 +694,53 @@ function hydrateSession() {
     }
 
     session = {
+      ...createBaseSession(),
       status: "in_progress",
       nodeIndex: parsed.nodeIndex,
       startedAtEpochMs: parsed.startedAtEpochMs,
       updatedAtEpochMs: parsed.updatedAtEpochMs ?? parsed.startedAtEpochMs,
       activeRoundId: parsed.activeRoundId ?? uid(),
+      nodeProgress:
+        parsed.nodeProgress && typeof parsed.nodeProgress === "object"
+          ? parsed.nodeProgress
+          : {},
     };
   } catch (_error) {
     window.localStorage.removeItem(SESSION_KEY);
   }
+}
+
+function applyScreenEntryState() {
+  const screen = APP.querySelector(".screen");
+  if (!screen || prefersReducedMotion()) {
+    return;
+  }
+  screen.classList.add("screen--entering");
+  window.requestAnimationFrame(() => {
+    screen.classList.add("screen--entered");
+  });
+}
+
+function renderWithGhost(renderFn) {
+  const currentId = ++renderTransitionId;
+  const reduced = prefersReducedMotion();
+  const activeScreen = APP.querySelector(".screen");
+
+  const runSwap = () => {
+    if (currentId !== renderTransitionId) {
+      return;
+    }
+    renderFn();
+    applyScreenEntryState();
+  };
+
+  if (!activeScreen || reduced) {
+    runSwap();
+    return;
+  }
+
+  activeScreen.classList.add("screen--leaving");
+  window.setTimeout(runSwap, DUR_GHOST_EXIT_MS);
 }
 
 function renderStart() {
@@ -478,6 +749,7 @@ function renderStart() {
       ${devGestureZonesMarkup()}
       <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
         <div class="load-cloud">
+          <div class="load-cloud__aura"></div>
           <canvas class="load-cloud__canvas" id="startCloudCanvas"></canvas>
         </div>
       </div>
@@ -496,32 +768,61 @@ function renderStart() {
   focusPrimary("startButton");
 }
 
+function playConclusionThenReset() {
+  clearTimers();
+  APP.innerHTML = `
+    <section class="screen finale-screen" id="finaleScreen" tabindex="-1">
+      <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
+        <div class="load-cloud">
+          <div class="load-cloud__aura"></div>
+          <canvas class="load-cloud__canvas" id="finaleCloudCanvas"></canvas>
+        </div>
+      </div>
+    </section>
+  `;
+  applyScreenEntryState();
+  const finaleCanvas = document.getElementById("finaleCloudCanvas");
+  stopLoadAnimation = startLoadVisual(finaleCanvas);
+  finaleTimerId = window.setTimeout(() => {
+    finaleTimerId = null;
+    stopLoadVisual();
+    resetSessionData();
+    render();
+  }, DUR_FINALE_MS);
+}
+
 function renderLoad(node) {
   APP.innerHTML = `
     <section class="screen" id="loadScreen" tabindex="-1">
       ${devGestureZonesMarkup()}
       <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
         <div class="load-cloud">
+          <div class="load-cloud__aura"></div>
           <canvas class="load-cloud__canvas" id="loadCloudCanvas"></canvas>
         </div>
       </div>
-      <p class="timer" id="loadTimer">Next in ${formatSeconds(node.durationMs)}s</p>
     </section>
   `;
 
   const loadCloudCanvas = document.getElementById("loadCloudCanvas");
   stopLoadVisual();
-  stopLoadAnimation = startLoadVisual(loadCloudCanvas, node.durationMs / 2);
-
-  const timerLabel = document.getElementById("loadTimer");
-  const startedAt = Date.now();
+  const startedAtEpochMs = Date.now();
+  stopLoadAnimation = startLoadVisual(loadCloudCanvas, {
+    showTrace: true,
+    traceDurationMs: node.durationMs,
+    traceStartEpochMs: startedAtEpochMs,
+  });
 
   loadTimerId = window.setTimeout(() => {
     loadTimerId = null;
     session.nodeIndex += 1;
 
-    if (session.nodeIndex >= flowNodes.length || isExpired(session.startedAtEpochMs)) {
+    if (isExpired(session.startedAtEpochMs)) {
       resetToStart();
+      return;
+    }
+    if (session.nodeIndex >= flowNodes.length) {
+      playConclusionThenReset();
       return;
     }
 
@@ -529,23 +830,109 @@ function renderLoad(node) {
     render();
   }, node.durationMs);
 
-  loadCountdownId = window.setInterval(() => {
-    const elapsed = Date.now() - startedAt;
-    const remaining = Math.max(node.durationMs - elapsed, 0);
-    if (timerLabel) {
-      timerLabel.textContent = `Next in ${formatSeconds(remaining)}s`;
-    }
-    if (remaining <= 0) {
-      window.clearInterval(loadCountdownId);
-      loadCountdownId = null;
-    }
-  }, 220);
-
   bindDevGestures();
   focusPrimary("loadScreen");
 }
 
+function stanzaMarkup(text) {
+  return `<div class="stanza-wrap"><p class="prayer-text stanza">${text}</p></div>`;
+}
+
+function invocationBeadsMarkup(node) {
+  if (node.kind !== "invocation") {
+    return "";
+  }
+  const total = node.invocationTotal ?? 7;
+  const activeIndex = node.invocationIndex ?? 1;
+  const beads = Array.from({ length: total }, (_, i) => {
+    const isActive = i + 1 <= activeIndex;
+    return `<span class="bead ${isActive ? "bead--active" : ""}" aria-hidden="true"></span>`;
+  }).join("");
+  return `<div class="bead-arc" aria-hidden="true">${beads}</div>`;
+}
+
+function bindTapAdvance(id, onTap) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  target.addEventListener("click", onTap);
+  target.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onTap();
+    }
+  });
+}
+
 function renderPrayer(node) {
+  const nodeProgress = getNodeProgress(session.nodeIndex, node);
+  let revealMarkup = `<p class="prayer-text">${node.text}</p>`;
+  let canShowNext = true;
+  let tapHandler = null;
+
+  if (nodeProgress.mode === "vr") {
+    const pairs = parseVRPairs(node.text);
+    const pair = pairs[nodeProgress.pairIndex] ?? pairs[0];
+    const responseVisible = nodeProgress.phase === "await_next_pair";
+
+    revealMarkup = `
+      <div class="prayer-progress" id="prayerTapArea" tabindex="0" role="button" aria-label="Reveal next response">
+        <p class="prayer-text vr-line ${responseVisible ? "vr-line--versicle-dimmed" : "vr-line--versicle-active"}">${pair?.versicle ?? ""}</p>
+        <p class="prayer-text vr-line ${responseVisible ? "vr-line--response-visible" : "vr-line--response-hidden"}">${pair?.response ?? ""}</p>
+      </div>
+    `;
+
+    const lastPairIndex = Math.max(0, pairs.length - 1);
+    const finalResponseShown =
+      nodeProgress.pairIndex === lastPairIndex &&
+      nodeProgress.phase === "await_next_pair";
+    canShowNext = finalResponseShown && isNextVisible(nodeProgress);
+    if (!canShowNext && finalResponseShown) {
+      ensureRevealTimer(nodeProgress);
+    }
+
+    tapHandler = () => {
+      const progress = getNodeProgress(session.nodeIndex, node);
+      if (progress.phase === "await_response") {
+        progress.phase = "await_next_pair";
+        const isFinal = progress.pairIndex >= lastPairIndex;
+        if (isFinal && !progress.nextVisibleAtEpochMs) {
+          progress.nextVisibleAtEpochMs = Date.now() + DUR_REVEAL_NEXT_DELAY_MS;
+        }
+      } else if (progress.pairIndex < lastPairIndex) {
+        progress.pairIndex += 1;
+        progress.phase = "await_response";
+      }
+      persistSession();
+      render();
+    };
+  } else if (nodeProgress.mode === "stanza") {
+    const stanzas = STANZAS_PER_PRAYER[node.kind] ?? [node.text];
+    const lastIndex = Math.max(0, stanzas.length - 1);
+    const stanzaIndex = Math.max(0, Math.min(nodeProgress.stanzaIndex, lastIndex));
+    revealMarkup = `
+      <div class="prayer-progress" id="prayerTapArea" tabindex="0" role="button" aria-label="Reveal next stanza">
+        ${stanzaMarkup(stanzas[stanzaIndex])}
+      </div>
+    `;
+    const finalStanzaVisible = stanzaIndex >= lastIndex;
+    canShowNext = finalStanzaVisible && isNextVisible(nodeProgress);
+    if (!canShowNext && finalStanzaVisible) {
+      ensureRevealTimer(nodeProgress);
+    }
+
+    tapHandler = () => {
+      const progress = getNodeProgress(session.nodeIndex, node);
+      if (progress.stanzaIndex < lastIndex) {
+        progress.stanzaIndex += 1;
+        if (progress.stanzaIndex >= lastIndex && !progress.nextVisibleAtEpochMs) {
+          progress.nextVisibleAtEpochMs = Date.now() + DUR_REVEAL_NEXT_DELAY_MS;
+        }
+        persistSession();
+        render();
+      }
+    };
+  }
+
   APP.innerHTML = `
     <section class="screen screen--prayer">
       ${devGestureZonesMarkup()}
@@ -554,18 +941,22 @@ function renderPrayer(node) {
           <p class="meta">${node.meta}</p>
           <h2 class="prayer-title">${node.title}</h2>
         </div>
-        <p class="prayer-text">${node.text}</p>
+        ${invocationBeadsMarkup(node)}
+        ${revealMarkup}
       </div>
-      <footer class="actions">
-        <button class="btn" id="nextButton" type="button">Next</button>
+      <footer class="actions next-shell ${canShowNext ? "next-shell--visible" : ""}">
+        <button class="btn" id="nextButton" type="button" ${canShowNext ? "" : "disabled"}>Next</button>
       </footer>
     </section>
   `;
 
   const nextButton = document.getElementById("nextButton");
   nextButton?.addEventListener("click", advanceFromPrayer);
+  if (tapHandler) {
+    bindTapAdvance("prayerTapArea", tapHandler);
+  }
   bindDevGestures();
-  focusPrimary("nextButton");
+  focusPrimary(canShowNext ? "nextButton" : "prayerTapArea");
 }
 
 function bindDevGestures() {
@@ -584,7 +975,7 @@ function render() {
   clearTimers();
 
   if (session.status !== "in_progress") {
-    renderStart();
+    renderWithGhost(renderStart);
     return;
   }
 
@@ -595,17 +986,19 @@ function render() {
 
   const node = flowNodes[session.nodeIndex];
   if (!node) {
-    resetToStart();
+    playConclusionThenReset();
     return;
   }
 
   if (node.type === "load") {
-    renderLoad(node);
+    renderWithGhost(() => renderLoad(node));
     return;
   }
 
-  renderPrayer(node);
+  renderWithGhost(() => renderPrayer(node));
 }
+
+APP?.style.setProperty("--transition-ghost", TRANSITION_GHOST);
 
 hydrateSession();
 startExpiryWatcher();
