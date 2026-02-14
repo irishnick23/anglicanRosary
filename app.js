@@ -165,10 +165,6 @@ function devGestureZonesMarkup() {
   }
 
   return `
-    <div class="test-nav" aria-label="Testing navigation controls">
-      <button class="test-nav__btn test-nav__btn--back" id="testBackButton" type="button" aria-label="Go back one step">←</button>
-      <button class="test-nav__btn test-nav__btn--forward" id="testForwardButton" type="button" aria-label="Go forward one step">→</button>
-    </div>
     <div class="dev-zone dev-zone--left" id="devZoneLeft" aria-hidden="true"></div>
     <div class="dev-zone dev-zone--right" id="devZoneRight" aria-hidden="true"></div>
   `;
@@ -270,10 +266,7 @@ function setGlobalTapHandler(handler) {
 }
 
 function isSystemControlTarget(target) {
-  return (
-    target instanceof Element &&
-    (target.closest(".dev-zone") || target.closest(".test-nav"))
-  );
+  return target instanceof Element && target.closest(".dev-zone");
 }
 
 function clearTimers() {
@@ -1085,12 +1078,6 @@ function bindDevGestures() {
   if (!DEV_RESET_ENABLED) {
     return;
   }
-
-  const testBackButton = document.getElementById("testBackButton");
-  testBackButton?.addEventListener("click", retreatForTesting);
-
-  const testForwardButton = document.getElementById("testForwardButton");
-  testForwardButton?.addEventListener("click", advanceForTesting);
 
   const leftZone = document.getElementById("devZoneLeft");
   leftZone?.addEventListener("click", () => registerDevTap("left"));

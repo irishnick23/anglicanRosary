@@ -377,54 +377,6 @@ button {
   right: 0;
 }
 
-.test-nav {
-  position: absolute;
-  top: 0.8rem;
-  left: 0;
-  right: 0;
-  z-index: 5;
-  pointer-events: none;
-}
-
-.test-nav__btn {
-  position: absolute;
-  pointer-events: auto;
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: rgba(0, 0, 0, 0.45);
-  color: var(--fg);
-  font-size: 0.85rem;
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition:
-    border-color 180ms ease,
-    background-color 180ms ease,
-    transform 180ms ease;
-}
-
-.test-nav__btn--back {
-  left: 0.6rem;
-}
-
-.test-nav__btn--forward {
-  right: 0.6rem;
-}
-
-.test-nav__btn:hover {
-  border-color: rgba(228, 228, 231, 0.7);
-  background: rgba(228, 228, 231, 0.12);
-  transform: translateY(-1px);
-}
-
-.test-nav__btn:focus-visible {
-  outline: 2px solid rgba(228, 228, 231, 0.8);
-  outline-offset: 2px;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .btn {
     transition: none;
@@ -443,9 +395,5 @@ button {
     animation: none;
     transform: none;
     filter: none;
-  }
-
-  .test-nav__btn {
-    transition: none;
   }
 }
