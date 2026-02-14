@@ -265,6 +265,17 @@ function focusPrimary(id) {
   }
 }
 
+function setGlobalTapHandler(handler) {
+  APP.onclick = typeof handler === "function" ? handler : null;
+}
+
+function isSystemControlTarget(target) {
+  return (
+    target instanceof Element &&
+    (target.closest(".dev-zone") || target.closest(".test-nav"))
+  );
+}
+
 function clearTimers() {
   stopLoadVisual();
   if (loadTimerId) {
@@ -766,6 +777,9 @@ function renderStart() {
       </div>
       <h1 class="title">Anglican Rosary</h1>
       <button class="btn" id="startButton" type="button">Start</button>
+      <footer class="actions">
+        <p class="prayer-hint prayer-hint--visible">Tap anywhere to continue</p>
+      </footer>
     </section>
   `;
 
@@ -775,12 +789,22 @@ function renderStart() {
 
   const startButton = document.getElementById("startButton");
   startButton?.addEventListener("click", startRound);
+  setGlobalTapHandler((event) => {
+    if (isSystemControlTarget(event.target)) {
+      return;
+    }
+    if (event.target instanceof Element && event.target.closest("#startButton")) {
+      return;
+    }
+    startRound();
+  });
   bindDevGestures();
   focusPrimary("startButton");
 }
 
 function playConclusionThenReset() {
   clearTimers();
+  setGlobalTapHandler(null);
   lastRenderedScreen = { type: "finale" };
   APP.innerHTML = `
     <section class="screen finale-screen" id="finaleScreen" tabindex="-1">
@@ -804,6 +828,7 @@ function playConclusionThenReset() {
 
 function renderLoad(node) {
   lastRenderedScreen = { type: "load", durationMs: node.durationMs };
+  setGlobalTapHandler(null);
   APP.innerHTML = `
     <section class="screen" id="loadScreen" tabindex="-1">
       ${devGestureZonesMarkup()}
@@ -812,6 +837,9 @@ function renderLoad(node) {
           <canvas class="load-cloud__canvas" id="loadCloudCanvas"></canvas>
         </div>
       </div>
+      <footer class="actions">
+        <p class="prayer-hint prayer-hint--visible">Continue in stillness...</p>
+      </footer>
     </section>
   `;
 
@@ -949,12 +977,12 @@ function renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, renderNode
   const nodeProgress = getNodeProgress(session.nodeIndex, node);
   const flowState = getPrayerFlowState(node, nodeProgress);
   prayerFlow.innerHTML = flowState.markup;
-
-  if (flowState.canAdvance) {
+  const tapEnabled = flowState.canAdvance || flowState.canProgress;
+  if (tapEnabled) {
     prayerHint.textContent = "Tap anywhere to continue";
     prayerHint.classList.add("prayer-hint--visible");
   } else {
-    prayerHint.textContent = "Continue in stillness...";
+    prayerHint.textContent = "";
     prayerHint.classList.remove("prayer-hint--visible");
   }
 
@@ -969,10 +997,7 @@ function renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, renderNode
   }
 
   const onGlobalTap = (event) => {
-    if (
-      event.target instanceof Element &&
-      (event.target.closest(".dev-zone") || event.target.closest(".test-nav"))
-    ) {
+    if (isSystemControlTarget(event.target)) {
       return;
     }
     const activeFlowState = getPrayerFlowState(node, getNodeProgress(session.nodeIndex, node));
@@ -986,7 +1011,7 @@ function renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, renderNode
     }
   };
 
-  prayerScreen.onclick = onGlobalTap;
+  setGlobalTapHandler(onGlobalTap);
 }
 
 function renderPrayer(node) {
@@ -1049,7 +1074,7 @@ function renderStickyInvocationBody(node) {
     prayerHint.textContent = "Tap anywhere to continue";
     prayerHint.classList.add("prayer-hint--visible");
   } else {
-    prayerHint.textContent = "Continue in stillness...";
+    prayerHint.textContent = "";
     prayerHint.classList.remove("prayer-hint--visible");
   }
 

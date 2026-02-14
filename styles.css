@@ -199,12 +199,17 @@ button {
   font-size: 0.82rem;
   color: var(--muted);
   letter-spacing: 0.05em;
-  opacity: 0.35;
-  transition: opacity 800ms ease-in-out;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 800ms ease-in-out,
+    visibility 0ms linear 800ms;
 }
 
 .prayer-hint--visible {
   opacity: 0.9;
+  visibility: visible;
+  transition-delay: 0ms;
 }
 
 .vr-line {
