@@ -1,4 +1,5 @@
 const APP = document.getElementById("app");
+const GLOBAL_CLOUD_CANVAS = document.getElementById("globalCloudCanvas");
 
 const SESSION_KEY = "anglican_rosary_session_v2";
 const SESSION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
@@ -63,13 +64,16 @@ let session = createBaseSession();
 
 let loadTimerId = null;
 let expiryWatcherId = null;
-let stopLoadAnimation = null;
 let revealReadyTimerId = null;
 let finaleTimerId = null;
+let stanzaSwapTimerId = null;
 let renderTransitionId = 0;
 let devLeftTapCount = 0;
 let devRightTapCount = 0;
 let lastRenderedScreen = null;
+let globalCloudStop = null;
+let loadRampStartEpochMs = 0;
+let loadRampDurationMs = 0;
 
 const breathEase = createBezierEasing(0.445, 0.05, 0.55, 0.95);
 const focusCoreRgb = hexToRgb(COLOR_FOCUS_CORE);
@@ -261,16 +265,11 @@ function focusPrimary(id) {
   }
 }
 
-function setGlobalTapHandler(handler) {
-  APP.onclick = typeof handler === "function" ? handler : null;
-}
-
 function isSystemControlTarget(target) {
   return target instanceof Element && target.closest(".dev-zone");
 }
 
 function clearTimers() {
-  stopLoadVisual();
   if (loadTimerId) {
     window.clearTimeout(loadTimerId);
     loadTimerId = null;
@@ -283,13 +282,10 @@ function clearTimers() {
     window.clearTimeout(finaleTimerId);
     finaleTimerId = null;
   }
-}
-
-function stopLoadVisual() {
-  if (typeof stopLoadAnimation === "function") {
-    stopLoadAnimation();
+  if (stanzaSwapTimerId) {
+    window.clearTimeout(stanzaSwapTimerId);
+    stanzaSwapTimerId = null;
   }
-  stopLoadAnimation = null;
 }
 
 function getBreathAmount(nowMs) {
@@ -313,6 +309,7 @@ function startLoadVisual(canvas, options = {}) {
   const {
     rampDurationMs = 0,
     rampStartEpochMs = Date.now(),
+    rampValueProvider = null,
   } = options;
 
   const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -359,12 +356,14 @@ function startLoadVisual(canvas, options = {}) {
     const minSide = Math.min(width, height);
     const breath = getBreathAmount(now);
     const loadRamp =
-      rampDurationMs > 0
-        ? Math.max(0, Math.min(1, (Date.now() - rampStartEpochMs) / rampDurationMs))
-        : 0;
+      typeof rampValueProvider === "function"
+        ? Math.max(0, Math.min(1, rampValueProvider()))
+        : rampDurationMs > 0
+          ? Math.max(0, Math.min(1, (Date.now() - rampStartEpochMs) / rampDurationMs))
+          : 0;
     const baseRadius = minSide * 0.35;
-    const currentRadius = baseRadius * (1 + breath * 0.2 + loadRamp * 0.08);
-    const cloudAlpha = 0.52 + breath * 0.28 + loadRamp * 0.16;
+    const currentRadius = baseRadius * (1 + breath * 0.2);
+    const cloudAlpha = 0.52 + breath * 0.28 + loadRamp * 0.08;
 
     ctx.globalCompositeOperation = "lighter";
     for (let i = 0; i < particles.length; i += 1) {
@@ -396,10 +395,11 @@ function startLoadVisual(canvas, options = {}) {
       }
     }
 
-    const nucleus = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseRadius * 0.35);
+    const nucleusRadius = baseRadius * (0.35 + loadRamp * 0.22);
+    const nucleus = ctx.createRadialGradient(cx, cy, 0, cx, cy, nucleusRadius);
     nucleus.addColorStop(
       0,
-      `rgba(${focusCoreRgb}, ${0.15 + breath * 0.2 + loadRamp * 0.16})`,
+      `rgba(${focusCoreRgb}, ${0.15 + breath * 0.2 + loadRamp * 0.22})`,
     );
     nucleus.addColorStop(1, `rgba(${focusCoreRgb}, 0)`);
     ctx.fillStyle = nucleus;
@@ -463,6 +463,36 @@ function startLoadVisual(canvas, options = {}) {
     }
     ctx.clearRect(0, 0, width, height);
   };
+}
+
+function getGlobalLoadRamp() {
+  if (!loadRampDurationMs || !loadRampStartEpochMs) {
+    return 0;
+  }
+  const elapsed = Date.now() - loadRampStartEpochMs;
+  if (elapsed >= loadRampDurationMs) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, elapsed / loadRampDurationMs));
+}
+
+function setGlobalLoadRamp(durationMs) {
+  if (!durationMs || durationMs <= 0) {
+    loadRampStartEpochMs = 0;
+    loadRampDurationMs = 0;
+    return;
+  }
+  loadRampStartEpochMs = Date.now();
+  loadRampDurationMs = durationMs;
+}
+
+function initGlobalCloudCanvas() {
+  if (!GLOBAL_CLOUD_CANVAS || typeof globalCloudStop === "function") {
+    return;
+  }
+  globalCloudStop = startLoadVisual(GLOBAL_CLOUD_CANVAS, {
+    rampValueProvider: getGlobalLoadRamp,
+  });
 }
 
 function startExpiryWatcher() {
@@ -763,11 +793,6 @@ function renderStart() {
   APP.innerHTML = `
     <section class="screen">
       ${devGestureZonesMarkup()}
-      <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
-        <div class="load-cloud">
-          <canvas class="load-cloud__canvas" id="startCloudCanvas"></canvas>
-        </div>
-      </div>
       <h1 class="title">Anglican Rosary</h1>
       <button class="btn" id="startButton" type="button">Start</button>
       <footer class="actions">
@@ -775,45 +800,20 @@ function renderStart() {
       </footer>
     </section>
   `;
-
-  const startCloudCanvas = document.getElementById("startCloudCanvas");
-  stopLoadVisual();
-  stopLoadAnimation = startLoadVisual(startCloudCanvas);
-
-  const startButton = document.getElementById("startButton");
-  startButton?.addEventListener("click", startRound);
-  setGlobalTapHandler((event) => {
-    if (isSystemControlTarget(event.target)) {
-      return;
-    }
-    if (event.target instanceof Element && event.target.closest("#startButton")) {
-      return;
-    }
-    startRound();
-  });
   bindDevGestures();
   focusPrimary("startButton");
 }
 
 function playConclusionThenReset() {
   clearTimers();
-  setGlobalTapHandler(null);
   lastRenderedScreen = { type: "finale" };
   APP.innerHTML = `
     <section class="screen finale-screen" id="finaleScreen" tabindex="-1">
-      <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
-        <div class="load-cloud">
-          <canvas class="load-cloud__canvas" id="finaleCloudCanvas"></canvas>
-        </div>
-      </div>
     </section>
   `;
   applyScreenEntryState();
-  const finaleCanvas = document.getElementById("finaleCloudCanvas");
-  stopLoadAnimation = startLoadVisual(finaleCanvas);
   finaleTimerId = window.setTimeout(() => {
     finaleTimerId = null;
-    stopLoadVisual();
     resetSessionData();
     render();
   }, DUR_FINALE_MS);
@@ -821,28 +821,12 @@ function playConclusionThenReset() {
 
 function renderLoad(node) {
   lastRenderedScreen = { type: "load", durationMs: node.durationMs };
-  setGlobalTapHandler(null);
+  setGlobalLoadRamp(node.durationMs);
   APP.innerHTML = `
     <section class="screen" id="loadScreen" tabindex="-1">
       ${devGestureZonesMarkup()}
-      <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
-        <div class="load-cloud">
-          <canvas class="load-cloud__canvas" id="loadCloudCanvas"></canvas>
-        </div>
-      </div>
-      <footer class="actions">
-        <p class="prayer-hint prayer-hint--visible">Continue in stillness...</p>
-      </footer>
     </section>
   `;
-
-  const loadCloudCanvas = document.getElementById("loadCloudCanvas");
-  stopLoadVisual();
-  const startedAtEpochMs = Date.now();
-  stopLoadAnimation = startLoadVisual(loadCloudCanvas, {
-    rampDurationMs: node.durationMs,
-    rampStartEpochMs: startedAtEpochMs,
-  });
 
   loadTimerId = window.setTimeout(() => {
     loadTimerId = null;
@@ -869,17 +853,16 @@ function stanzaMarkup(text) {
   return `<div class="stanza-wrap"><p class="prayer-text stanza">${text}</p></div>`;
 }
 
-function invocationBeadsMarkup(node) {
+function invocationBeadsInnerMarkup(node) {
   if (node.kind !== "invocation") {
     return "";
   }
   const total = node.invocationTotal ?? 7;
   const activeIndex = node.invocationIndex ?? 1;
-  const beads = Array.from({ length: total }, (_, i) => {
+  return Array.from({ length: total }, (_, i) => {
     const isActive = i + 1 <= activeIndex;
     return `<span class="bead ${isActive ? "bead--active" : ""}" aria-hidden="true"></span>`;
   }).join("");
-  return `<div class="bead-arc" id="invocationBeads" aria-hidden="true">${beads}</div>`;
 }
 
 function getPrayerFlowState(node, nodeProgress) {
@@ -989,26 +972,15 @@ function renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, renderNode
     );
   }
 
-  const onGlobalTap = (event) => {
-    if (isSystemControlTarget(event.target)) {
-      return;
-    }
-    const activeFlowState = getPrayerFlowState(node, getNodeProgress(session.nodeIndex, node));
-    if (activeFlowState.canProgress && typeof activeFlowState.onTap === "function") {
-      activeFlowState.onTap();
-      renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, renderNodeIndex);
-      return;
-    }
-    if (activeFlowState.canAdvance) {
-      advanceFromPrayer();
-    }
-  };
-
-  setGlobalTapHandler(onGlobalTap);
 }
 
 function renderPrayer(node) {
-  lastRenderedScreen = { type: "prayer", kind: node.kind, meta: node.meta };
+  const introInvocationBeads =
+    node.kind === "invocation" &&
+    (!lastRenderedScreen ||
+      lastRenderedScreen.type !== "prayer" ||
+      lastRenderedScreen.kind !== "invocation" ||
+      lastRenderedScreen.meta !== node.meta);
   const nodeProgress = getNodeProgress(session.nodeIndex, node);
   const initialState = getPrayerFlowState(node, nodeProgress);
   const initialBodyMarkup =
@@ -1024,7 +996,11 @@ function renderPrayer(node) {
           <p class="meta">${node.meta}</p>
           <h2 class="prayer-title">${node.title}</h2>
         </div>
-        ${invocationBeadsMarkup(node)}
+        ${
+          node.kind === "invocation"
+            ? `<div class="bead-arc ${introInvocationBeads ? "bead-arc--intro" : ""}" id="invocationBeads" aria-hidden="true">${invocationBeadsInnerMarkup(node)}</div>`
+            : ""
+        }
         <div id="prayerFlow">${initialBodyMarkup}</div>
       </div>
       <footer class="actions">
@@ -1039,11 +1015,18 @@ function renderPrayer(node) {
   const prayerFlow = document.getElementById("prayerFlow");
   const prayerHint = document.getElementById("prayerHint");
   renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, session.nodeIndex);
+  lastRenderedScreen = {
+    type: "prayer",
+    nodeIndex: session.nodeIndex,
+    kind: node.kind,
+    title: node.title,
+    meta: node.meta,
+  };
   bindDevGestures();
   focusPrimary("prayerScreen");
 }
 
-function renderStickyInvocationBody(node) {
+function renderStickyPrayerBody(node, renderNodeIndex = session.nodeIndex) {
   const prayerScreen = document.getElementById("prayerScreen");
   const prayerFlow = document.getElementById("prayerFlow");
   const prayerHint = document.getElementById("prayerHint");
@@ -1051,19 +1034,54 @@ function renderStickyInvocationBody(node) {
     renderPrayer(node);
     return;
   }
+  if (session.nodeIndex !== renderNodeIndex) {
+    return;
+  }
 
   const nodeProgress = getNodeProgress(session.nodeIndex, node);
   const flowState = getPrayerFlowState(node, nodeProgress);
-  prayerFlow.innerHTML = `<div class="prayer-body-ghost">${flowState.markup}</div>`;
-
-  const beads = document.getElementById("invocationBeads");
-  if (beads) {
-    beads.outerHTML = invocationBeadsMarkup(node);
+  const stickyMarkup =
+    node.kind === "invocation"
+      ? `<div class="prayer-body-ghost">${flowState.markup}</div>`
+      : flowState.markup;
+  const currentStanza = prayerFlow.querySelector(".stanza-wrap");
+  const shouldAnimateExit = flowState.mode === "stanza" && currentStanza;
+  const applyStickyMarkup = () => {
+    if (session.nodeIndex !== renderNodeIndex) {
+      return;
+    }
+    prayerFlow.innerHTML = stickyMarkup;
+  };
+  if (shouldAnimateExit) {
+    currentStanza.classList.add("stanza--leaving");
+    if (stanzaSwapTimerId) {
+      window.clearTimeout(stanzaSwapTimerId);
+    }
+    stanzaSwapTimerId = window.setTimeout(() => {
+      stanzaSwapTimerId = null;
+      applyStickyMarkup();
+    }, 600);
   } else {
-    prayerFlow.insertAdjacentHTML("beforebegin", invocationBeadsMarkup(node));
+    applyStickyMarkup();
   }
 
-  if (flowState.canAdvance) {
+  const beads = document.getElementById("invocationBeads");
+  if (node.kind === "invocation") {
+    if (beads) {
+      beads.classList.remove("bead-arc--intro");
+      beads.innerHTML = invocationBeadsInnerMarkup(node);
+    } else {
+      prayerFlow.insertAdjacentHTML(
+        "beforebegin",
+        `<div class="bead-arc bead-arc--intro" id="invocationBeads" aria-hidden="true">${invocationBeadsInnerMarkup(node)}</div>`,
+      );
+    }
+  } else if (beads) {
+    beads.remove();
+  }
+
+  const tapEnabled = flowState.canAdvance || flowState.canProgress;
+  if (tapEnabled) {
     prayerHint.textContent = "Tap anywhere to continue";
     prayerHint.classList.add("prayer-hint--visible");
   } else {
@@ -1071,7 +1089,39 @@ function renderStickyInvocationBody(node) {
     prayerHint.classList.remove("prayer-hint--visible");
   }
 
-  lastRenderedScreen = { type: "prayer", kind: node.kind, meta: node.meta };
+  if (!flowState.canAdvance && !flowState.canProgress) {
+    ensureRevealTimer(nodeProgress, () => renderStickyPrayerBody(node, renderNodeIndex));
+  } else if (!flowState.canAdvance && nodeProgress.nextVisibleAtEpochMs) {
+    ensureRevealTimer(nodeProgress, () => renderStickyPrayerBody(node, renderNodeIndex));
+  }
+
+  lastRenderedScreen = {
+    type: "prayer",
+    nodeIndex: session.nodeIndex,
+    kind: node.kind,
+    title: node.title,
+    meta: node.meta,
+  };
+}
+
+function handleGlobalAdvance() {
+  if (session.status !== "in_progress") {
+    return;
+  }
+  const node = flowNodes[session.nodeIndex];
+  if (!node || node.type !== "prayer") {
+    return;
+  }
+
+  const flowState = getPrayerFlowState(node, getNodeProgress(session.nodeIndex, node));
+  if (flowState.canProgress && typeof flowState.onTap === "function") {
+    flowState.onTap();
+    render();
+    return;
+  }
+  if (flowState.canAdvance) {
+    advanceFromPrayer();
+  }
 }
 
 function bindDevGestures() {
@@ -1110,14 +1160,13 @@ function render() {
     return;
   }
 
-  const stickyInvocationStep =
+  const stickyPrayerStep =
     lastRenderedScreen?.type === "prayer" &&
-    lastRenderedScreen.kind === "invocation" &&
-    node.kind === "invocation" &&
-    lastRenderedScreen.meta === node.meta;
+    (lastRenderedScreen.nodeIndex === session.nodeIndex ||
+      (lastRenderedScreen.title === node.title && lastRenderedScreen.meta === node.meta));
 
-  if (stickyInvocationStep) {
-    renderStickyInvocationBody(node);
+  if (stickyPrayerStep) {
+    renderStickyPrayerBody(node);
     return;
   }
 
@@ -1126,6 +1175,20 @@ function render() {
 
 APP?.style.setProperty("--transition-ghost", TRANSITION_GHOST);
 
+initGlobalCloudCanvas();
 hydrateSession();
 startExpiryWatcher();
 render();
+
+window.addEventListener("click", (event) => {
+  if (isSystemControlTarget(event.target)) {
+    return;
+  }
+  if (session.status === "in_progress") {
+    handleGlobalAdvance();
+    return;
+  }
+  if (session.status === "start") {
+    startRound();
+  }
+});

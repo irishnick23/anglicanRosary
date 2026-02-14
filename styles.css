@@ -40,10 +40,27 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: var(--bg);
   color: var(--fg);
   font-family: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
   line-height: 1.8;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: transparent;
+}
+
+#globalCloudCanvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
 }
 
 button {
@@ -52,6 +69,8 @@ button {
 }
 
 #app {
+  position: relative;
+  z-index: 1;
   min-height: 100dvh;
   width: 100%;
   display: grid;
@@ -207,7 +226,7 @@ button {
 }
 
 .prayer-hint--visible {
-  opacity: 0.9;
+  opacity: 0.45;
   visibility: visible;
   transition-delay: 0ms;
 }
@@ -244,11 +263,19 @@ button {
   min-height: 11rem;
   display: grid;
   align-content: center;
+  animation: stanza-enter 1800ms var(--ghost-ease) both;
 }
 
 .stanza {
   margin: 0;
-  animation: stanza-enter 1800ms var(--ghost-ease) both;
+}
+
+.stanza--leaving {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition:
+    opacity 600ms ease-in-out,
+    transform 600ms var(--ghost-ease);
 }
 
 .bead-arc {
@@ -260,13 +287,20 @@ button {
   margin-bottom: 0.2rem;
 }
 
+.bead-arc--intro {
+  animation: bead-arc-enter 800ms ease both;
+}
+
 .bead {
   width: 2px;
   height: 2px;
   border-radius: 999px;
   background: var(--focus-core);
   opacity: 0.3;
-  transition: opacity 1500ms ease-in-out;
+  transition:
+    opacity 1500ms ease-in-out,
+    box-shadow 1500ms ease-in-out,
+    filter 1500ms ease-in-out;
 }
 
 .bead:nth-child(1),
@@ -340,6 +374,17 @@ button {
   }
 }
 
+@keyframes bead-arc-enter {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
 @keyframes finale-cloud {
   0% {
     transform: scale(1);
@@ -387,6 +432,7 @@ button {
   .screen--entered,
   .vr-line,
   .stanza,
+  .stanza--leaving,
   .prayer-body-ghost,
   .finale-screen .load-cloud,
   .finale-screen .load-cloud__canvas,
