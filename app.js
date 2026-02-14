@@ -69,9 +69,9 @@ let finaleTimerId = null;
 let renderTransitionId = 0;
 let devLeftTapCount = 0;
 let devRightTapCount = 0;
+let lastRenderedScreen = null;
 
 const breathEase = createBezierEasing(0.445, 0.05, 0.55, 0.95);
-const moonlightRgb = hexToRgb(COLOR_MOONLIGHT);
 const focusCoreRgb = hexToRgb(COLOR_FOCUS_CORE);
 
 function createBaseSession() {
@@ -165,6 +165,10 @@ function devGestureZonesMarkup() {
   }
 
   return `
+    <div class="test-nav" aria-label="Testing navigation controls">
+      <button class="test-nav__btn test-nav__btn--back" id="testBackButton" type="button" aria-label="Go back one step">←</button>
+      <button class="test-nav__btn test-nav__btn--forward" id="testForwardButton" type="button" aria-label="Go forward one step">→</button>
+    </div>
     <div class="dev-zone dev-zone--left" id="devZoneLeft" aria-hidden="true"></div>
     <div class="dev-zone dev-zone--right" id="devZoneRight" aria-hidden="true"></div>
   `;
@@ -303,9 +307,8 @@ function startLoadVisual(canvas, options = {}) {
   if (!ctx) return () => {};
 
   const {
-    showTrace = false,
-    traceDurationMs = DEFAULT_LOAD_MS,
-    traceStartEpochMs = Date.now(),
+    rampDurationMs = 0,
+    rampStartEpochMs = Date.now(),
   } = options;
 
   const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -343,21 +346,6 @@ function startLoadVisual(canvas, options = {}) {
     particles = Array.from({ length: 6500 }, createParticle);
   }
 
-  function drawTrace(cx, cy, radius, breath) {
-    if (!showTrace || traceDurationMs <= 0) return;
-    const elapsed = Date.now() - traceStartEpochMs;
-    const progress = Math.max(0, Math.min(1, elapsed / traceDurationMs));
-    if (progress <= 0) return;
-    ctx.save();
-    ctx.globalCompositeOperation = "source-over";
-    ctx.beginPath();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = `rgba(${moonlightRgb}, ${0.14 + breath * 0.08})`;
-    ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
-    ctx.stroke();
-    ctx.restore();
-  }
-
   function drawCloud(now) {
     if (!width || !height) return;
     ctx.clearRect(0, 0, width, height);
@@ -366,11 +354,13 @@ function startLoadVisual(canvas, options = {}) {
     const cy = height / 2;
     const minSide = Math.min(width, height);
     const breath = getBreathAmount(now);
+    const loadRamp =
+      rampDurationMs > 0
+        ? Math.max(0, Math.min(1, (Date.now() - rampStartEpochMs) / rampDurationMs))
+        : 0;
     const baseRadius = minSide * 0.35;
-    const currentRadius = baseRadius * (1 + breath * 0.2);
-    const cloudAlpha = 0.6 + breath * 0.3;
-
-    drawTrace(cx, cy, baseRadius * 1.08, breath);
+    const currentRadius = baseRadius * (1 + breath * 0.2 + loadRamp * 0.08);
+    const cloudAlpha = 0.52 + breath * 0.28 + loadRamp * 0.16;
 
     ctx.globalCompositeOperation = "lighter";
     for (let i = 0; i < particles.length; i += 1) {
@@ -403,7 +393,10 @@ function startLoadVisual(canvas, options = {}) {
     }
 
     const nucleus = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseRadius * 0.35);
-    nucleus.addColorStop(0, `rgba(${focusCoreRgb}, ${0.18 + breath * 0.2})`);
+    nucleus.addColorStop(
+      0,
+      `rgba(${focusCoreRgb}, ${0.15 + breath * 0.2 + loadRamp * 0.16})`,
+    );
     nucleus.addColorStop(1, `rgba(${focusCoreRgb}, 0)`);
     ctx.fillStyle = nucleus;
     ctx.fillRect(0, 0, width, height);
@@ -499,6 +492,7 @@ function resetSessionData() {
 function resetToStart() {
   clearTimers();
   resetSessionData();
+  lastRenderedScreen = null;
   render();
 }
 
@@ -562,14 +556,16 @@ function isNextVisible(progress) {
   return Date.now() >= progress.nextVisibleAtEpochMs;
 }
 
-function ensureRevealTimer(progress) {
+function ensureRevealTimer(progress, onReady) {
   if (!progress.nextVisibleAtEpochMs || isNextVisible(progress) || revealReadyTimerId) {
     return;
   }
   const waitMs = Math.max(0, progress.nextVisibleAtEpochMs - Date.now());
   revealReadyTimerId = window.setTimeout(() => {
     revealReadyTimerId = null;
-    render();
+    if (typeof onReady === "function") {
+      onReady();
+    }
   }, waitMs);
 }
 
@@ -630,6 +626,21 @@ function advanceForTesting() {
   session.nodeIndex += 1;
   if (session.nodeIndex >= flowNodes.length) {
     playConclusionThenReset();
+    return;
+  }
+
+  persistSession();
+  render();
+}
+
+function retreatForTesting() {
+  if (session.status !== "in_progress") {
+    return;
+  }
+
+  session.nodeIndex -= 1;
+  if (session.nodeIndex < 0) {
+    resetToStart();
     return;
   }
 
@@ -744,12 +755,12 @@ function renderWithGhost(renderFn) {
 }
 
 function renderStart() {
+  lastRenderedScreen = { type: "start" };
   APP.innerHTML = `
     <section class="screen">
       ${devGestureZonesMarkup()}
       <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
         <div class="load-cloud">
-          <div class="load-cloud__aura"></div>
           <canvas class="load-cloud__canvas" id="startCloudCanvas"></canvas>
         </div>
       </div>
@@ -770,11 +781,11 @@ function renderStart() {
 
 function playConclusionThenReset() {
   clearTimers();
+  lastRenderedScreen = { type: "finale" };
   APP.innerHTML = `
     <section class="screen finale-screen" id="finaleScreen" tabindex="-1">
       <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
         <div class="load-cloud">
-          <div class="load-cloud__aura"></div>
           <canvas class="load-cloud__canvas" id="finaleCloudCanvas"></canvas>
         </div>
       </div>
@@ -792,12 +803,12 @@ function playConclusionThenReset() {
 }
 
 function renderLoad(node) {
+  lastRenderedScreen = { type: "load", durationMs: node.durationMs };
   APP.innerHTML = `
     <section class="screen" id="loadScreen" tabindex="-1">
       ${devGestureZonesMarkup()}
       <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
         <div class="load-cloud">
-          <div class="load-cloud__aura"></div>
           <canvas class="load-cloud__canvas" id="loadCloudCanvas"></canvas>
         </div>
       </div>
@@ -808,9 +819,8 @@ function renderLoad(node) {
   stopLoadVisual();
   const startedAtEpochMs = Date.now();
   stopLoadAnimation = startLoadVisual(loadCloudCanvas, {
-    showTrace: true,
-    traceDurationMs: node.durationMs,
-    traceStartEpochMs: startedAtEpochMs,
+    rampDurationMs: node.durationMs,
+    rampStartEpochMs: startedAtEpochMs,
   });
 
   loadTimerId = window.setTimeout(() => {
@@ -848,121 +858,214 @@ function invocationBeadsMarkup(node) {
     const isActive = i + 1 <= activeIndex;
     return `<span class="bead ${isActive ? "bead--active" : ""}" aria-hidden="true"></span>`;
   }).join("");
-  return `<div class="bead-arc" aria-hidden="true">${beads}</div>`;
+  return `<div class="bead-arc" id="invocationBeads" aria-hidden="true">${beads}</div>`;
 }
 
-function bindTapAdvance(id, onTap) {
-  const target = document.getElementById(id);
-  if (!target) return;
-  target.addEventListener("click", onTap);
-  target.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onTap();
-    }
-  });
-}
-
-function renderPrayer(node) {
-  const nodeProgress = getNodeProgress(session.nodeIndex, node);
-  let revealMarkup = `<p class="prayer-text">${node.text}</p>`;
-  let canShowNext = true;
-  let tapHandler = null;
-
+function getPrayerFlowState(node, nodeProgress) {
   if (nodeProgress.mode === "vr") {
     const pairs = parseVRPairs(node.text);
-    const pair = pairs[nodeProgress.pairIndex] ?? pairs[0];
-    const responseVisible = nodeProgress.phase === "await_next_pair";
-
-    revealMarkup = `
-      <div class="prayer-progress" id="prayerTapArea" tabindex="0" role="button" aria-label="Reveal next response">
-        <p class="prayer-text vr-line ${responseVisible ? "vr-line--versicle-dimmed" : "vr-line--versicle-active"}">${pair?.versicle ?? ""}</p>
-        <p class="prayer-text vr-line ${responseVisible ? "vr-line--response-visible" : "vr-line--response-hidden"}">${pair?.response ?? ""}</p>
-      </div>
-    `;
-
     const lastPairIndex = Math.max(0, pairs.length - 1);
+    const currentPair = pairs[nodeProgress.pairIndex] ?? pairs[0] ?? { versicle: "", response: "" };
+    const responseVisible = nodeProgress.phase === "await_next_pair";
     const finalResponseShown =
-      nodeProgress.pairIndex === lastPairIndex &&
-      nodeProgress.phase === "await_next_pair";
-    canShowNext = finalResponseShown && isNextVisible(nodeProgress);
-    if (!canShowNext && finalResponseShown) {
-      ensureRevealTimer(nodeProgress);
-    }
-
-    tapHandler = () => {
-      const progress = getNodeProgress(session.nodeIndex, node);
-      if (progress.phase === "await_response") {
-        progress.phase = "await_next_pair";
-        const isFinal = progress.pairIndex >= lastPairIndex;
-        if (isFinal && !progress.nextVisibleAtEpochMs) {
-          progress.nextVisibleAtEpochMs = Date.now() + DUR_REVEAL_NEXT_DELAY_MS;
+      nodeProgress.pairIndex === lastPairIndex && nodeProgress.phase === "await_next_pair";
+    const canAdvance = finalResponseShown && isNextVisible(nodeProgress);
+    return {
+      mode: "vr",
+      canAdvance,
+      canProgress:
+        nodeProgress.phase === "await_response" ||
+        (nodeProgress.phase === "await_next_pair" && nodeProgress.pairIndex < lastPairIndex),
+      markup: `
+        <div class="prayer-progress">
+          <p class="prayer-text vr-line ${responseVisible ? "vr-line--versicle-dimmed" : "vr-line--versicle-active"}">${currentPair.versicle}</p>
+          <p class="prayer-text vr-line ${responseVisible ? "vr-line--response-visible" : "vr-line--response-hidden"}">${currentPair.response}</p>
+        </div>
+      `,
+      onTap: () => {
+        const progress = getNodeProgress(session.nodeIndex, node);
+        if (progress.phase === "await_response") {
+          progress.phase = "await_next_pair";
+          const isFinal = progress.pairIndex >= lastPairIndex;
+          if (isFinal && !progress.nextVisibleAtEpochMs) {
+            progress.nextVisibleAtEpochMs = Date.now() + DUR_REVEAL_NEXT_DELAY_MS;
+          }
+          persistSession();
+          return;
         }
-      } else if (progress.pairIndex < lastPairIndex) {
-        progress.pairIndex += 1;
-        progress.phase = "await_response";
-      }
-      persistSession();
-      render();
-    };
-  } else if (nodeProgress.mode === "stanza") {
-    const stanzas = STANZAS_PER_PRAYER[node.kind] ?? [node.text];
-    const lastIndex = Math.max(0, stanzas.length - 1);
-    const stanzaIndex = Math.max(0, Math.min(nodeProgress.stanzaIndex, lastIndex));
-    revealMarkup = `
-      <div class="prayer-progress" id="prayerTapArea" tabindex="0" role="button" aria-label="Reveal next stanza">
-        ${stanzaMarkup(stanzas[stanzaIndex])}
-      </div>
-    `;
-    const finalStanzaVisible = stanzaIndex >= lastIndex;
-    canShowNext = finalStanzaVisible && isNextVisible(nodeProgress);
-    if (!canShowNext && finalStanzaVisible) {
-      ensureRevealTimer(nodeProgress);
-    }
-
-    tapHandler = () => {
-      const progress = getNodeProgress(session.nodeIndex, node);
-      if (progress.stanzaIndex < lastIndex) {
-        progress.stanzaIndex += 1;
-        if (progress.stanzaIndex >= lastIndex && !progress.nextVisibleAtEpochMs) {
-          progress.nextVisibleAtEpochMs = Date.now() + DUR_REVEAL_NEXT_DELAY_MS;
+        if (progress.pairIndex < lastPairIndex) {
+          progress.pairIndex += 1;
+          progress.phase = "await_response";
+          persistSession();
         }
-        persistSession();
-        render();
-      }
+      },
     };
   }
 
+  if (nodeProgress.mode === "stanza") {
+    const stanzas = STANZAS_PER_PRAYER[node.kind] ?? [node.text];
+    const lastIndex = Math.max(0, stanzas.length - 1);
+    const stanzaIndex = Math.max(0, Math.min(nodeProgress.stanzaIndex, lastIndex));
+    const finalStanzaVisible = stanzaIndex >= lastIndex;
+    const canAdvance = finalStanzaVisible && isNextVisible(nodeProgress);
+    return {
+      mode: "stanza",
+      canAdvance,
+      canProgress: stanzaIndex < lastIndex,
+      markup: `
+        <div class="prayer-progress">
+          ${stanzaMarkup(stanzas[stanzaIndex])}
+        </div>
+      `,
+      onTap: () => {
+        const progress = getNodeProgress(session.nodeIndex, node);
+        if (progress.stanzaIndex < lastIndex) {
+          progress.stanzaIndex += 1;
+          if (progress.stanzaIndex >= lastIndex && !progress.nextVisibleAtEpochMs) {
+            progress.nextVisibleAtEpochMs = Date.now() + DUR_REVEAL_NEXT_DELAY_MS;
+          }
+          persistSession();
+        }
+      },
+    };
+  }
+
+  return {
+    mode: "default",
+    canAdvance: true,
+    canProgress: false,
+    markup: `<p class="prayer-text">${node.text}</p>`,
+    onTap: null,
+  };
+}
+
+function renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, renderNodeIndex) {
+  if (!prayerScreen || !prayerFlow || !prayerHint) {
+    return;
+  }
+  if (session.nodeIndex !== renderNodeIndex) {
+    return;
+  }
+  const nodeProgress = getNodeProgress(session.nodeIndex, node);
+  const flowState = getPrayerFlowState(node, nodeProgress);
+  prayerFlow.innerHTML = flowState.markup;
+
+  if (flowState.canAdvance) {
+    prayerHint.textContent = "Tap anywhere to continue";
+    prayerHint.classList.add("prayer-hint--visible");
+  } else {
+    prayerHint.textContent = "Continue in stillness...";
+    prayerHint.classList.remove("prayer-hint--visible");
+  }
+
+  if (!flowState.canAdvance && !flowState.canProgress) {
+    ensureRevealTimer(nodeProgress, () =>
+      renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, renderNodeIndex),
+    );
+  } else if (!flowState.canAdvance && nodeProgress.nextVisibleAtEpochMs) {
+    ensureRevealTimer(nodeProgress, () =>
+      renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, renderNodeIndex),
+    );
+  }
+
+  const onGlobalTap = (event) => {
+    if (
+      event.target instanceof Element &&
+      (event.target.closest(".dev-zone") || event.target.closest(".test-nav"))
+    ) {
+      return;
+    }
+    const activeFlowState = getPrayerFlowState(node, getNodeProgress(session.nodeIndex, node));
+    if (activeFlowState.canProgress && typeof activeFlowState.onTap === "function") {
+      activeFlowState.onTap();
+      renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, renderNodeIndex);
+      return;
+    }
+    if (activeFlowState.canAdvance) {
+      advanceFromPrayer();
+    }
+  };
+
+  prayerScreen.onclick = onGlobalTap;
+}
+
+function renderPrayer(node) {
+  lastRenderedScreen = { type: "prayer", kind: node.kind, meta: node.meta };
+  const nodeProgress = getNodeProgress(session.nodeIndex, node);
+  const initialState = getPrayerFlowState(node, nodeProgress);
+  const initialBodyMarkup =
+    node.kind === "invocation"
+      ? `<div class="prayer-body-ghost">${initialState.markup}</div>`
+      : initialState.markup;
+
   APP.innerHTML = `
-    <section class="screen screen--prayer">
+    <section class="screen screen--prayer" id="prayerScreen" tabindex="-1">
       ${devGestureZonesMarkup()}
       <div class="prayer-main">
-        <div>
+        <div class="prayer-header">
           <p class="meta">${node.meta}</p>
           <h2 class="prayer-title">${node.title}</h2>
         </div>
         ${invocationBeadsMarkup(node)}
-        ${revealMarkup}
+        <div id="prayerFlow">${initialBodyMarkup}</div>
       </div>
-      <footer class="actions next-shell ${canShowNext ? "next-shell--visible" : ""}">
-        <button class="btn" id="nextButton" type="button" ${canShowNext ? "" : "disabled"}>Next</button>
+      <footer class="actions">
+        <p class="prayer-hint ${initialState.canAdvance ? "prayer-hint--visible" : ""}" id="prayerHint">
+          ${initialState.canAdvance ? "Tap anywhere to continue" : "Continue in stillness..."}
+        </p>
       </footer>
     </section>
   `;
 
-  const nextButton = document.getElementById("nextButton");
-  nextButton?.addEventListener("click", advanceFromPrayer);
-  if (tapHandler) {
-    bindTapAdvance("prayerTapArea", tapHandler);
-  }
+  const prayerScreen = document.getElementById("prayerScreen");
+  const prayerFlow = document.getElementById("prayerFlow");
+  const prayerHint = document.getElementById("prayerHint");
+  renderPrayerFlow(node, prayerScreen, prayerFlow, prayerHint, session.nodeIndex);
   bindDevGestures();
-  focusPrimary(canShowNext ? "nextButton" : "prayerTapArea");
+  focusPrimary("prayerScreen");
+}
+
+function renderStickyInvocationBody(node) {
+  const prayerScreen = document.getElementById("prayerScreen");
+  const prayerFlow = document.getElementById("prayerFlow");
+  const prayerHint = document.getElementById("prayerHint");
+  if (!prayerScreen || !prayerFlow || !prayerHint) {
+    renderPrayer(node);
+    return;
+  }
+
+  const nodeProgress = getNodeProgress(session.nodeIndex, node);
+  const flowState = getPrayerFlowState(node, nodeProgress);
+  prayerFlow.innerHTML = `<div class="prayer-body-ghost">${flowState.markup}</div>`;
+
+  const beads = document.getElementById("invocationBeads");
+  if (beads) {
+    beads.outerHTML = invocationBeadsMarkup(node);
+  } else {
+    prayerFlow.insertAdjacentHTML("beforebegin", invocationBeadsMarkup(node));
+  }
+
+  if (flowState.canAdvance) {
+    prayerHint.textContent = "Tap anywhere to continue";
+    prayerHint.classList.add("prayer-hint--visible");
+  } else {
+    prayerHint.textContent = "Continue in stillness...";
+    prayerHint.classList.remove("prayer-hint--visible");
+  }
+
+  lastRenderedScreen = { type: "prayer", kind: node.kind, meta: node.meta };
 }
 
 function bindDevGestures() {
   if (!DEV_RESET_ENABLED) {
     return;
   }
+
+  const testBackButton = document.getElementById("testBackButton");
+  testBackButton?.addEventListener("click", retreatForTesting);
+
+  const testForwardButton = document.getElementById("testForwardButton");
+  testForwardButton?.addEventListener("click", advanceForTesting);
 
   const leftZone = document.getElementById("devZoneLeft");
   leftZone?.addEventListener("click", () => registerDevTap("left"));
@@ -992,6 +1095,17 @@ function render() {
 
   if (node.type === "load") {
     renderWithGhost(() => renderLoad(node));
+    return;
+  }
+
+  const stickyInvocationStep =
+    lastRenderedScreen?.type === "prayer" &&
+    lastRenderedScreen.kind === "invocation" &&
+    node.kind === "invocation" &&
+    lastRenderedScreen.meta === node.meta;
+
+  if (stickyInvocationStep) {
+    renderStickyInvocationBody(node);
     return;
   }
 

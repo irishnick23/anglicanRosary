@@ -95,15 +95,6 @@ button {
   place-items: center;
 }
 
-.load-cloud__aura {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  border: 1px solid rgba(212, 212, 216, 0.4);
-  opacity: 0.38;
-  transform: scale(1);
-}
-
 .load-cloud__canvas {
   position: relative;
   z-index: 1;
@@ -189,25 +180,31 @@ button {
   justify-content: center;
 }
 
-.next-shell {
-  opacity: 0;
-  transform: translateY(10px);
-  pointer-events: none;
-}
-
-.next-shell--visible {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-  transition:
-    opacity 1500ms ease-in-out,
-    transform 1800ms var(--ghost-ease);
-}
-
 .prayer-progress {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.prayer-body-ghost {
+  animation: stanza-enter 1800ms var(--ghost-ease) both;
+}
+
+.prayer-header {
+  opacity: 1;
+}
+
+.prayer-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  opacity: 0.35;
+  transition: opacity 800ms ease-in-out;
+}
+
+.prayer-hint--visible {
+  opacity: 0.9;
 }
 
 .vr-line {
@@ -375,6 +372,54 @@ button {
   right: 0;
 }
 
+.test-nav {
+  position: absolute;
+  top: 0.8rem;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.test-nav__btn {
+  position: absolute;
+  pointer-events: auto;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--fg);
+  font-size: 0.85rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.test-nav__btn--back {
+  left: 0.6rem;
+}
+
+.test-nav__btn--forward {
+  right: 0.6rem;
+}
+
+.test-nav__btn:hover {
+  border-color: rgba(228, 228, 231, 0.7);
+  background: rgba(228, 228, 231, 0.12);
+  transform: translateY(-1px);
+}
+
+.test-nav__btn:focus-visible {
+  outline: 2px solid rgba(228, 228, 231, 0.8);
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .btn {
     transition: none;
@@ -384,8 +429,8 @@ button {
   .screen--entering,
   .screen--entered,
   .vr-line,
-  .next-shell--visible,
   .stanza,
+  .prayer-body-ghost,
   .finale-screen .load-cloud,
   .finale-screen .load-cloud__canvas,
   .bead {
@@ -393,5 +438,9 @@ button {
     animation: none;
     transform: none;
     filter: none;
+  }
+
+  .test-nav__btn {
+    transition: none;
   }
 }
