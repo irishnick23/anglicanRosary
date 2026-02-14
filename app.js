@@ -6,22 +6,22 @@ const DEFAULT_LOAD_MS = 7140;
 const DEV_RESET_ENABLED = true;
 
 const APOSTLES_CREED =
-  "I BELIEVE in God, the Father Almighty, the Maker of heaven and earth: And in Jesus Christ his only Son our Lord: Who was conceived by the Holy Ghost, Born of the Virgin Mary: Suffered under Pontius Pilate, Was crucified, dead, and buried: He descended into hell; The third day he rose again from the dead: He ascended into heaven, And sitteth on the right hand of God the Father Almighty: From thence he shall come to judge the quick and the dead. I believe in the Holy Ghost: The holy catholic church; The communion of saints: The forgiveness of sins: The resurrection of the body, And the life everlasting. Amen.";
+  "I believe in God, the Father Almighty, the maker of heaven and earth: and in Jesus Christ his only Son our Lord: who was conceived by the Holy Ghost, born of the Virgin Mary: suffered under Pontius Pilate, was crucified, dead, and buried: he descended into hell; the third day he rose again from the dead: he ascended into heaven, and sitteth on the right hand of God the Father Almighty: from thence he shall come to judge the quick and the dead. I believe in the Holy Ghost: the holy catholic church; the communion of saints: the forgiveness of sins: the resurrection of the body, and the life everlasting. Amen.";
 
 const INVITATORY_GLORIA =
   "V. O God, make speed to save us.\nR. O Lord, make haste to help us.\nV. Glory be to the Father, and to the Son, and to the Holy Ghost;\nR. As it was in the beginning, is now, and ever shall be, world without end. Amen.";
 
 const LORDS_PRAYER =
-  "OUR Father which art in heaven, Hallowed be thy name. Thy kingdom come, Thy will be done in earth, as it is in heaven. Give us this day our daily bread. And forgive us our trespasses, as we forgive them that trespass against us. And lead us not into temptation, but deliver us from evil: For thine is the kingdom, and the power, and the glory, for ever and ever. Amen.";
+  "Our Father which art in heaven, hallowed be thy name. Thy kingdom come, thy will be done in earth, as it is in heaven. Give us this day our daily bread. And forgive us our trespasses, as we forgive them that trespass against us. And lead us not into temptation, but deliver us from evil: for thine is the kingdom, and the power, and the glory, for ever and ever. Amen.";
 
 const INVOCATION =
-  "O GOD the Son, Redeemer of the World: have mercy upon us miserable Sinners.";
+  "O God the Son, Redeemer of the world: have mercy upon us miserable sinners.";
 
 const MYSTERIES = [
-  "By the Mystery of Thy Holy Incarnation;",
-  "By Thy Holy Nativity and Circumcision;",
-  "By Thy Baptism, Fasting, and Temptation;",
-  "By Thine Agony and Bloody Sweat;",
+  "By the mystery of thy holy incarnation;",
+  "By thy holy nativity and circumcision;",
+  "By thy baptism, fasting, and temptation;",
+  "By thine agony and bloody sweat;",
 ];
 
 let flowNodes = [];
