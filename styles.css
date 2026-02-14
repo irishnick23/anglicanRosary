@@ -168,42 +168,20 @@ button {
   letter-spacing: 0.02em;
 }
 
-.dev-reset {
+.dev-zone {
   position: absolute;
-  top: 0.35rem;
-  left: 0.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  border-radius: 0.4rem;
-  padding: 0.3rem 0.45rem;
-  cursor: pointer;
+  top: 0;
+  bottom: 0;
+  width: clamp(3.5rem, 20vw, 6rem);
+  z-index: 3;
 }
 
-.dev-reset:hover {
-  color: rgba(255, 255, 255, 0.86);
-  border-color: rgba(255, 255, 255, 0.5);
+.dev-zone--left {
+  left: 0;
 }
 
-.dev-skip {
-  position: absolute;
-  top: 0.35rem;
-  right: 0.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.88rem;
-  line-height: 1;
-  border-radius: 0.4rem;
-  padding: 0.3rem 0.42rem;
-  cursor: pointer;
-}
-
-.dev-skip:hover {
-  color: rgba(255, 255, 255, 0.86);
-  border-color: rgba(255, 255, 255, 0.5);
+.dev-zone--right {
+  right: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

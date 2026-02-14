@@ -4,6 +4,7 @@ const SESSION_KEY = "anglican_rosary_session_v1";
 const SESSION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_LOAD_MS = 7140;
 const DEV_RESET_ENABLED = true;
+const DEV_GESTURE_TAP_TARGET = 5;
 
 const APOSTLES_CREED =
   "I believe in God, the Father Almighty, the maker of heaven and earth: and in Jesus Christ his only Son our Lord: who was conceived by the Holy Ghost, born of the Virgin Mary: suffered under Pontius Pilate, was crucified, dead, and buried: he descended into hell; the third day he rose again from the dead: he ascended into heaven, and sitteth on the right hand of God the Father Almighty: from thence he shall come to judge the quick and the dead. I believe in the Holy Ghost: the holy catholic church; the communion of saints: the forgiveness of sins: the resurrection of the body, and the life everlasting. Amen.";
@@ -38,6 +39,8 @@ let loadTimerId = null;
 let loadCountdownId = null;
 let expiryWatcherId = null;
 let stopLoadAnimation = null;
+let devLeftTapCount = 0;
+let devRightTapCount = 0;
 
 function uid() {
   return `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -45,6 +48,17 @@ function uid() {
 
 function formatSeconds(ms) {
   return Math.ceil(ms / 1000);
+}
+
+function devGestureZonesMarkup() {
+  if (!DEV_RESET_ENABLED) {
+    return "";
+  }
+
+  return `
+    <div class="dev-zone dev-zone--left" id="devZoneLeft" aria-hidden="true"></div>
+    <div class="dev-zone dev-zone--right" id="devZoneRight" aria-hidden="true"></div>
+  `;
 }
 
 function prayerNode(kind, title, text, meta) {
@@ -391,6 +405,25 @@ function advanceForTesting() {
   render();
 }
 
+function registerDevTap(side) {
+  if (side === "left") {
+    devLeftTapCount += 1;
+    devRightTapCount = 0;
+    if (devLeftTapCount >= DEV_GESTURE_TAP_TARGET) {
+      devLeftTapCount = 0;
+      resetToStart();
+    }
+    return;
+  }
+
+  devRightTapCount += 1;
+  devLeftTapCount = 0;
+  if (devRightTapCount >= DEV_GESTURE_TAP_TARGET) {
+    devRightTapCount = 0;
+    advanceForTesting();
+  }
+}
+
 function startRound() {
   clearTimers();
   session = {
@@ -442,8 +475,7 @@ function hydrateSession() {
 function renderStart() {
   APP.innerHTML = `
     <section class="screen">
-      ${DEV_RESET_ENABLED ? '<button class="dev-reset" id="devResetButton" type="button">Back to start</button>' : ""}
-      ${DEV_RESET_ENABLED ? '<button class="dev-skip" id="devSkipButton" type="button" aria-label="Skip to next screen" title="Skip to next screen">→</button>' : ""}
+      ${devGestureZonesMarkup()}
       <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
         <div class="load-cloud">
           <canvas class="load-cloud__canvas" id="startCloudCanvas"></canvas>
@@ -460,15 +492,14 @@ function renderStart() {
 
   const startButton = document.getElementById("startButton");
   startButton?.addEventListener("click", startRound);
-  bindDevReset();
+  bindDevGestures();
   focusPrimary("startButton");
 }
 
 function renderLoad(node) {
   APP.innerHTML = `
     <section class="screen" id="loadScreen" tabindex="-1">
-      ${DEV_RESET_ENABLED ? '<button class="dev-reset" id="devResetButton" type="button">Back to start</button>' : ""}
-      ${DEV_RESET_ENABLED ? '<button class="dev-skip" id="devSkipButton" type="button" aria-label="Skip to next screen" title="Skip to next screen">→</button>' : ""}
+      ${devGestureZonesMarkup()}
       <div class="symbol-wrap symbol-wrap--load" aria-hidden="true">
         <div class="load-cloud">
           <canvas class="load-cloud__canvas" id="loadCloudCanvas"></canvas>
@@ -510,15 +541,14 @@ function renderLoad(node) {
     }
   }, 220);
 
-  bindDevReset();
+  bindDevGestures();
   focusPrimary("loadScreen");
 }
 
 function renderPrayer(node) {
   APP.innerHTML = `
     <section class="screen screen--prayer">
-      ${DEV_RESET_ENABLED ? '<button class="dev-reset" id="devResetButton" type="button">Back to start</button>' : ""}
-      ${DEV_RESET_ENABLED ? '<button class="dev-skip" id="devSkipButton" type="button" aria-label="Skip to next screen" title="Skip to next screen">→</button>' : ""}
+      ${devGestureZonesMarkup()}
       <div class="prayer-main">
         <div>
           <p class="meta">${node.meta}</p>
@@ -534,19 +564,20 @@ function renderPrayer(node) {
 
   const nextButton = document.getElementById("nextButton");
   nextButton?.addEventListener("click", advanceFromPrayer);
-  bindDevReset();
+  bindDevGestures();
   focusPrimary("nextButton");
 }
 
-function bindDevReset() {
+function bindDevGestures() {
   if (!DEV_RESET_ENABLED) {
     return;
   }
-  const devResetButton = document.getElementById("devResetButton");
-  devResetButton?.addEventListener("click", resetToStart);
 
-  const devSkipButton = document.getElementById("devSkipButton");
-  devSkipButton?.addEventListener("click", advanceForTesting);
+  const leftZone = document.getElementById("devZoneLeft");
+  leftZone?.addEventListener("click", () => registerDevTap("left"));
+
+  const rightZone = document.getElementById("devZoneRight");
+  rightZone?.addEventListener("click", () => registerDevTap("right"));
 }
 
 function render() {
