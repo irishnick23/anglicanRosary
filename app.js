@@ -214,10 +214,22 @@ function updateHint(visible) {
 }
 
 /* 5. INTERACTION & BOOTSTRAP */
-window.addEventListener("click", (e) => {
+let lastTouchTime = 0;
+
+function handleTap(e) {
   if (e.target.closest(".dev-zone")) return;
   if (session.status === "start") startRound();
   else if (session.status === "in_progress") handleGlobalAdvance();
+}
+
+window.addEventListener("touchend", (e) => {
+  lastTouchTime = Date.now();
+  handleTap(e);
+});
+
+window.addEventListener("click", (e) => {
+  if (Date.now() - lastTouchTime < 500) return;
+  handleTap(e);
 });
 
 function handleGlobalAdvance() {
