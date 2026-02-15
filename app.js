@@ -12,37 +12,37 @@ const DRIFT_SMOOTHNESS = 0.008;
 
 const STANZAS_PER_PRAYER = {
   creed: [
-    "I believe in God, the Father Almighty,\nthe maker of heaven and earth:",
-    "And in Jesus Christ his only Son our Lord:\nwho was conceived by the Holy Ghost,\nborn of the Virgin Mary:",
-    "Suffered under Pontius Pilate,\nwas crucified, dead, and buried:\nhe descended into hell;",
-    "The third day he rose again from the dead:\nhe ascended into heaven,\nand sitteth on the right hand of God the Father Almighty:",
+    "I believe in God, the Father Almighty,\nthe Maker of heaven and earth:",
+    "And in Jesus Christ his only Son our Lord:\nWho was conceived by the Holy Ghost,\nBorn of the Virgin Mary:",
+    "Suffered under Pontius Pilate,\nWas crucified, dead, and buried:\nHe descended into hell;",
+    "The third day he rose again from the dead:\nHe ascended into heaven,\nAnd sitteth on the right hand of God the Father Almighty:",
     "From thence he shall come\nto judge the quick and the dead.",
-    "I believe in the Holy Ghost:\nthe holy catholic church;\nthe communion of saints:",
-    "The forgiveness of sins:\nthe resurrection of the body,\nand the life everlasting. Amen."
+    "I believe in the Holy Ghost:\nThe holy catholic church;\nThe communion of saints:",
+    "The forgiveness of sins:\nThe resurrection of the body,\nAnd the life everlasting. Amen."
   ],
   lords_prayer: [
     "Our Father which art in heaven,\nhallowed be thy name.",
-    "Thy kingdom come,\nthy will be done in earth,\nas it is in heaven.",
+    "Thy kingdom come,\nThy will be done in earth,\nas it is in heaven.",
     "Give us this day our daily bread.",
     "And forgive us our trespasses,\nas we forgive them that trespass against us.",
     "And lead us not into temptation,\nbut deliver us from evil:",
     "For thine is the kingdom,\nand the power, and the glory,\nfor ever and ever. Amen."
   ],
   invitatory: [
-    "O God Make speed to save us.",
-    "O Lord Maker haste to help us"
+    "O God, make speed to save us.",
+    "O Lord, make haste to help us."
   ],
   gloria: [
-    "Glory be to the Father, and to the Son and to the holy ghost",
-    "As it was in the beginning, is now and ever shall be world without end amen"
+    "Glory be to the Father, and to the Son, and to the Holy Ghost;",
+    "As it was in the beginning, is now, and ever shall be, world without end. Amen."
   ]
 };
 
 const MYSTERIES = [
-  "By the mystery of thy holy incarnation;", "By thy holy nativity and circumcision;",
-  "By thy baptism, fasting, and temptation;", "By thine agony and bloody sweat;",
-  "By thy cross and passion;", "By thy precious death and burial;",
-  "By thy glorious resurrection;", "By the coming of the Holy Ghost;"
+  "By the Mystery of Thy Holy Incarnation;", "By Thy Holy Nativity and Circumcision;",
+  "By Thy Baptism, Fasting, and Temptation;", "By Thine Agony and Bloody Sweat;",
+  "By Thy Cross and Passion;", "By Thy Precious Death and Burial;",
+  "By Thy Glorious Resurrection;", "By the coming of the Holy Ghost;"
 ];
 
 const OPENING_SCREEN_ORDER = [
@@ -72,7 +72,7 @@ const OPENING_SCREEN_ORDER = [
 ];
 
 const INVOCATIONS_PER_MYSTERY = 7;
-const INVOCATION_TEXT = "O God the Son, Redeemer of the world: have mercy upon us miserable sinners.";
+const INVOCATION_TEXT = "God the Son, Redeemer of the World: have mercy upon us miserable Sinners.";
 
 function createLoadNode(step = {}) {
   return { type: "load", durationMs: step.durationMs || DEFAULT_LOAD_MS };
