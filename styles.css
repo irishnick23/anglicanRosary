@@ -37,9 +37,9 @@ html, body {
   display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
 }
 .screen--start {
-  justify-content: flex-start;
-  gap: 1.25rem;
-  padding-top: clamp(56vh, 58vh, 62vh);
+  justify-content: flex-end;
+  gap: 1.5rem;
+  padding-bottom: 14vh;
 }
 .title {
   margin: 0;
