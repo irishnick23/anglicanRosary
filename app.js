@@ -37,6 +37,67 @@ const MYSTERIES = [
   "By thy glorious resurrection;", "By the coming of the Holy Ghost;"
 ];
 
+const OPENING_SCREEN_ORDER = [
+  { type: "load" },
+  {
+    type: "prayer",
+    kind: "creed",
+    title: "Apostles' Creed",
+    meta: "Opening"
+  },
+  { type: "load" },
+  {
+    type: "prayer",
+    kind: "invitatory",
+    title: "Invitatory / Gloria",
+    meta: "Opening",
+    text: "O God, make speed to save us. O Lord, make haste to help us. Glory be to the Father, and to the Son, and to the Holy Ghost."
+  },
+  { type: "load" }
+];
+
+const INVOCATIONS_PER_MYSTERY = 7;
+const INVOCATION_TEXT = "O God the Son, Redeemer of the world: have mercy upon us miserable sinners.";
+
+function createLoadNode(step = {}) {
+  return { type: "load", durationMs: step.durationMs || DEFAULT_LOAD_MS };
+}
+
+function createSinglePassMysteryNodes() {
+  const nodes = [];
+
+  nodes.push({
+    type: "prayer",
+    kind: "lords_prayer",
+    title: "The Lord's Prayer",
+    meta: "Main Sequence"
+  });
+  nodes.push(createLoadNode());
+
+  for (let mysteryIndex = 1; mysteryIndex <= MYSTERIES.length; mysteryIndex += 1) {
+    nodes.push({
+      type: "prayer",
+      kind: `mystery_${mysteryIndex}`,
+      title: `Mystery ${mysteryIndex}`,
+      meta: "Main Sequence",
+      text: MYSTERIES[mysteryIndex - 1] || "By thy cross and passion;"
+    });
+
+    for (let bead = 1; bead <= INVOCATIONS_PER_MYSTERY; bead += 1) {
+      nodes.push({
+        type: "prayer",
+        kind: `invocation_${mysteryIndex}_${bead}`,
+        title: "Invocation",
+        meta: `Mystery ${mysteryIndex} · Bead ${bead}`,
+        text: INVOCATION_TEXT
+      });
+    }
+    nodes.push(createLoadNode());
+  }
+
+  return nodes;
+}
+
 /* 2. STATE ENGINE */
 let session = { status: "start", nodeIndex: -1, nodeProgress: {} };
 let lastRenderedScreen = null;
@@ -262,48 +323,20 @@ function handleGlobalAdvance() {
 }
 
 function buildFlowTimeline() {
-  const nodes = [
-    { type: "prayer", kind: "creed", title: "Apostles' Creed", meta: "Opening" },
-    { type: "load", durationMs: DEFAULT_LOAD_MS },
-    {
-      type: "prayer",
-      kind: "invitatory",
-      title: "Invitatory / Gloria",
-      meta: "Opening",
-      text: "O God, make speed to save us. O Lord, make haste to help us. Glory be to the Father, and to the Son, and to the Holy Ghost."
-    },
-    { type: "load", durationMs: DEFAULT_LOAD_MS }
-  ];
+  const nodes = [];
 
-  for (let week = 0; week < 4; week += 1) {
-    nodes.push({
-      type: "prayer",
-      kind: "lords_prayer",
-      title: "The Lord's Prayer",
-      meta: `Week ${week + 1}`
-    });
-    nodes.push({ type: "load", durationMs: DEFAULT_LOAD_MS });
-
-    nodes.push({
-      type: "prayer",
-      kind: `mystery_${week + 1}`,
-      title: "Mystery",
-      meta: `Week ${week + 1}`,
-      text: MYSTERIES[week] || "By thy cross and passion;"
-    });
-    nodes.push({ type: "load", durationMs: DEFAULT_LOAD_MS });
-
-    for (let bead = 0; bead < 7; bead += 1) {
-      nodes.push({
-        type: "prayer",
-        kind: `invocation_${week + 1}_${bead + 1}`,
-        title: "Invocation",
-        meta: `Week ${week + 1} · Bead ${bead + 1}`,
-        text: "Lord Jesus Christ, Son of God, have mercy upon me."
-      });
-      nodes.push({ type: "load", durationMs: DEFAULT_LOAD_MS });
+  OPENING_SCREEN_ORDER.forEach((step) => {
+    if (step.type === "load") {
+      nodes.push(createLoadNode(step));
+      return;
     }
-  }
+
+    if (step.type === "prayer") {
+      nodes.push({ ...step });
+    }
+  });
+
+  nodes.push(...createSinglePassMysteryNodes());
 
   return nodes;
 }
