@@ -60,7 +60,8 @@ function startLoadVisual(canvas) {
     const ramp = loadRampDuration ? Math.min(1, elapsed / loadRampDuration) : 0;
     const breath = 0.5 + 0.5 * Math.sin(now / 1500); // Simple breath loop
 
-    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const cx = canvas.width / 2;
+    const cy = session.status === "start" ? canvas.height * 0.3 : canvas.height / 2;
     const currentRadius = (canvas.width * 0.35) * (1 + breath * 0.2);
     const cloudAlpha = 0.52 + breath * 0.28 + ramp * 0.08;
 
@@ -116,7 +117,7 @@ function renderStart() {
 
   lastRenderedScreen = { type: "start", nodeIndex: -1 };
   APP.innerHTML = `
-    <section class="screen">
+    <section class="screen screen--start">
       <h1 class="title">Anglican Rosary</h1>
       <button class="btn" id="startButton" type="button">Start</button>
     </section>
