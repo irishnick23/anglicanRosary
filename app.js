@@ -39,6 +39,7 @@ let session = { status: "start", nodeIndex: -1, nodeProgress: {} };
 let lastRenderedScreen = null;
 let loadRampStart = 0;
 let loadRampDuration = 0;
+let loadTimerId = null;
 let flowNodes = [];
 
 const breathEase = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
@@ -101,6 +102,90 @@ function render() {
   }
 }
 
+function renderStart() {
+  if (loadTimerId) {
+    clearTimeout(loadTimerId);
+    loadTimerId = null;
+  }
+
+  lastRenderedScreen = { type: "start", nodeIndex: -1 };
+  APP.innerHTML = `
+    <section class="screen">
+      <h1 class="title">Anglican Rosary</h1>
+      <button class="btn" id="startButton" type="button">Start</button>
+      <footer class="actions">
+        <p class="prayer-hint prayer-hint--visible">Tap anywhere to continue</p>
+      </footer>
+    </section>
+  `;
+}
+
+function renderLoad(node) {
+  APP.innerHTML = `<section class="screen" id="loadScreen"></section>`;
+  lastRenderedScreen = { type: "load", nodeIndex: session.nodeIndex };
+
+  if (loadTimerId) clearTimeout(loadTimerId);
+  loadTimerId = setTimeout(() => {
+    loadTimerId = null;
+    advanceToNextNode();
+  }, node.durationMs || DEFAULT_LOAD_MS);
+}
+
+function renderPrayer(node) {
+  if (loadTimerId) {
+    clearTimeout(loadTimerId);
+    loadTimerId = null;
+  }
+
+  const nodeProgress = getNodeProgress(session.nodeIndex, node);
+  const initialState = getPrayerFlowState(node, nodeProgress);
+
+  APP.innerHTML = `
+    <section class="screen screen--prayer" id="prayerScreen">
+      <div class="prayer-main">
+        <div class="prayer-header">
+          <p class="meta">${node.meta || ""}</p>
+          <h2 class="prayer-title">${node.title || ""}</h2>
+        </div>
+        <div id="prayerFlow">${initialState.markup}</div>
+      </div>
+      <footer class="actions">
+        <p class="prayer-hint" id="prayerHint">Tap anywhere to continue</p>
+      </footer>
+    </section>
+  `;
+  updateHint(initialState.canAdvance || initialState.canProgress);
+
+  lastRenderedScreen = {
+    type: "prayer",
+    nodeIndex: session.nodeIndex,
+    stanzaIndex: nodeProgress.stanzaIndex,
+    pairIndex: nodeProgress.pairIndex
+  };
+}
+
+function renderWithGhost(renderFn) {
+  const activeScreen = APP.querySelector(".screen");
+  if (!activeScreen) {
+    renderFn();
+    applyScreenState();
+    return;
+  }
+  activeScreen.classList.add("screen--leaving");
+  setTimeout(() => {
+    renderFn();
+    applyScreenState();
+  }, DUR_GHOST_EXIT_MS);
+}
+
+function applyScreenState() {
+  const screen = APP.querySelector(".screen");
+  if (screen) {
+    screen.classList.add("screen--entering");
+    requestAnimationFrame(() => screen.classList.add("screen--entered"));
+  }
+}
+
 function renderStickyPrayerBody(node) {
   const progress = getNodeProgress(session.nodeIndex, node);
   const flowState = getPrayerFlowState(node, progress);
@@ -137,10 +222,101 @@ window.addEventListener("click", (e) => {
 
 function handleGlobalAdvance() {
   const node = flowNodes[session.nodeIndex];
+  if (!node || node.type !== "prayer") return;
   const progress = getNodeProgress(session.nodeIndex, node);
   const state = getPrayerFlowState(node, progress);
   if (state.canProgress) { state.onTap(); render(); }
   else if (state.canAdvance) advanceToNextNode();
+}
+
+function buildFlowTimeline() {
+  const nodes = [
+    { type: "prayer", kind: "creed", title: "Apostles' Creed", meta: "Opening" },
+    { type: "load", durationMs: DEFAULT_LOAD_MS },
+    {
+      type: "prayer",
+      kind: "invitatory",
+      title: "Invitatory / Gloria",
+      meta: "Opening",
+      text: "O God, make speed to save us. O Lord, make haste to help us. Glory be to the Father, and to the Son, and to the Holy Ghost."
+    },
+    { type: "load", durationMs: DEFAULT_LOAD_MS }
+  ];
+
+  for (let week = 0; week < 4; week += 1) {
+    nodes.push({
+      type: "prayer",
+      kind: "lords_prayer",
+      title: "The Lord's Prayer",
+      meta: `Week ${week + 1}`
+    });
+    nodes.push({ type: "load", durationMs: DEFAULT_LOAD_MS });
+
+    nodes.push({
+      type: "prayer",
+      kind: `mystery_${week + 1}`,
+      title: "Mystery",
+      meta: `Week ${week + 1}`,
+      text: MYSTERIES[week] || "By thy cross and passion;"
+    });
+    nodes.push({ type: "load", durationMs: DEFAULT_LOAD_MS });
+
+    for (let bead = 0; bead < 7; bead += 1) {
+      nodes.push({
+        type: "prayer",
+        kind: `invocation_${week + 1}_${bead + 1}`,
+        title: "Invocation",
+        meta: `Week ${week + 1} · Bead ${bead + 1}`,
+        text: "Lord Jesus Christ, Son of God, have mercy upon me."
+      });
+      nodes.push({ type: "load", durationMs: DEFAULT_LOAD_MS });
+    }
+  }
+
+  return nodes;
+}
+
+function getNodeProgress(index, node) {
+  if (!session.nodeProgress[index]) {
+    session.nodeProgress[index] = {
+      stanzaIndex: 0,
+      pairIndex: 0,
+      nextVisibleAtEpochMs: null
+    };
+  }
+  return session.nodeProgress[index];
+}
+
+function getPrayerFlowState(node, progress) {
+  const stanzas = STANZAS_PER_PRAYER[node.kind] || [node.text];
+  const isFinal = progress.stanzaIndex >= stanzas.length - 1;
+  return {
+    canProgress: !isFinal,
+    canAdvance: isFinal,
+    markup: `<div class="stanza-wrap"><p class="prayer-text">${stanzas[progress.stanzaIndex]}</p></div>`,
+    onTap: () => { progress.stanzaIndex += 1; }
+  };
+}
+
+function advanceToNextNode() {
+  if (session.nodeIndex + 1 >= flowNodes.length) {
+    session.status = "start";
+    session.nodeIndex = -1;
+    session.nodeProgress = {};
+    renderStart();
+    return;
+  }
+
+  session.nodeIndex += 1;
+  render();
+}
+
+function startRound() {
+  session.status = "in_progress";
+  session.nodeIndex = 0;
+  session.nodeProgress = {};
+  lastRenderedScreen = null;
+  render();
 }
 
 /* Initialize App */
