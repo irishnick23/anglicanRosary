@@ -108,14 +108,17 @@ function renderStart() {
     loadTimerId = null;
   }
 
+  // Show particles immediately on the start screen.
+  GLOBAL_CANVAS.style.opacity = "1";
+  // Reset ramp so the cloud remains in steady breathing mode.
+  loadRampStart = 0;
+  loadRampDuration = 0;
+
   lastRenderedScreen = { type: "start", nodeIndex: -1 };
   APP.innerHTML = `
     <section class="screen">
       <h1 class="title">Anglican Rosary</h1>
       <button class="btn" id="startButton" type="button">Start</button>
-      <footer class="actions">
-        <p class="prayer-hint prayer-hint--visible">Tap anywhere to continue</p>
-      </footer>
     </section>
   `;
 }
@@ -218,8 +221,17 @@ let lastTouchTime = 0;
 
 function handleTap(e) {
   if (e.target.closest(".dev-zone")) return;
-  if (session.status === "start") startRound();
-  else if (session.status === "in_progress") handleGlobalAdvance();
+
+  if (session.status === "start") {
+    if (e.target.closest("#startButton")) {
+      startRound();
+    }
+    return;
+  }
+
+  if (session.status === "in_progress") {
+    handleGlobalAdvance();
+  }
 }
 
 window.addEventListener("touchend", (e) => {
