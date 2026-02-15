@@ -61,8 +61,8 @@ function startLoadVisual(canvas) {
     const breath = 0.5 + 0.5 * Math.sin(now / 1500); // Simple breath loop
 
     const cx = canvas.width / 2;
-    const cy = session.status === "start" ? canvas.height * 0.3 : canvas.height / 2;
-    const currentRadius = (canvas.width * 0.35) * (1 + breath * 0.2);
+    const cy = session.status === "start" ? canvas.height * 0.36 : canvas.height / 2;
+    const currentRadius = (canvas.width * 0.5) * (1 + breath * 0.2);
     const cloudAlpha = 0.52 + breath * 0.28 + ramp * 0.08;
 
     ctx.globalCompositeOperation = "lighter";
