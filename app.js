@@ -6,6 +6,9 @@ const SESSION_KEY = "anglican_rosary_v2";
 const DEFAULT_LOAD_MS = 7140;
 const DUR_GHOST_EXIT_MS = 600;
 const DUR_REVEAL_NEXT_DELAY_MS = 2000;
+const PARTICLE_SPEED_SCALE = 0.5;
+const BREATH_CYCLE_MS = 5000;
+const DRIFT_SMOOTHNESS = 0.008;
 
 const STANZAS_PER_PRAYER = {
   creed: [
@@ -59,18 +62,18 @@ function startLoadVisual(canvas) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const elapsed = Date.now() - loadRampStart;
     const ramp = loadRampDuration ? Math.min(1, elapsed / loadRampDuration) : 0;
-    const breath = 0.5 + 0.5 * Math.sin(now / 1500); // Simple breath loop
+    const breath = 0.5 + 0.5 * Math.sin(now / (BREATH_CYCLE_MS / (2 * Math.PI)));
 
     const cx = canvas.width / 2;
     const targetCyFactor = session.status === "start" ? 0.36 : 0.5;
-    currentCyFactor += (targetCyFactor - currentCyFactor) * 0.02;
+    currentCyFactor += (targetCyFactor - currentCyFactor) * DRIFT_SMOOTHNESS;
     const cy = canvas.height * currentCyFactor;
     const currentRadius = (canvas.width * 0.68) * (1 + breath * 0.2);
     const cloudAlpha = 0.62 + breath * 0.3 + ramp * 0.1;
 
     ctx.globalCompositeOperation = "lighter";
     particles.forEach(p => {
-      const theta = p.theta + now * p.speed;
+      const theta = p.theta + (now * p.speed * PARTICLE_SPEED_SCALE);
       const x = Math.cos(theta) * p.r, y = Math.sin(theta) * p.r * 0.4, z = p.tilt * p.r;
       const sX = cx + x * currentRadius, sY = cy + y * currentRadius;
       ctx.fillStyle = `rgba(228,228,231,${(1.1 - p.r) * cloudAlpha * 0.42})`;

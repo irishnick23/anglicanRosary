@@ -13,6 +13,8 @@
   --bg: #000000; --fg: #d4d4d8; --muted: #71717a; --focus-core: #e4e4e7;
   --line: rgba(228, 228, 231, 0.3); --ghost-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --focus-max-width: 44rem;
+  --glow-speed: 12s;
+  --glow-opacity: 1.00;
 }
 
 * { box-sizing: border-box; }
@@ -109,7 +111,8 @@ html, body {
     rgba(228, 228, 231, 0.1),
     transparent 30%
   );
-  animation: rotate-glow 4s linear infinite;
+  animation: rotate-glow var(--glow-speed) linear infinite;
+  opacity: var(--glow-opacity);
   will-change: transform;
   z-index: -2;
 }
