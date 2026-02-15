@@ -15,6 +15,8 @@
   --focus-max-width: 44rem;
   --glow-speed: 12s;
   --glow-opacity: 1.00;
+  --hint-glow-speed: calc(var(--glow-speed) / 4);
+  --hint-visible-opacity: 0.72;
 }
 
 * { box-sizing: border-box; }
@@ -73,8 +75,38 @@ html, body {
 
 @keyframes bead-arc-enter { from { opacity: 0; filter: blur(8px); } to { opacity: 1; filter: blur(0); } }
 
-.prayer-hint { font-size: 0.82rem; color: var(--muted); opacity: 0; transition: opacity 800ms; }
-.prayer-hint--visible { opacity: 0.45; } /* The Whisper Hint */
+.prayer-hint,
+.ambient-cue {
+  font-size: 0.82rem;
+  color: var(--fg);
+  opacity: 0;
+  transition: opacity 2500ms ease-in-out;
+  will-change: opacity, text-shadow;
+}
+
+.prayer-hint--visible,
+.ambient-cue--thinking {
+  opacity: var(--hint-visible-opacity);
+  animation: hint-glow var(--hint-glow-speed) ease-in-out infinite alternate;
+}
+
+@keyframes hint-glow {
+  from {
+    opacity: 0.62;
+    text-shadow:
+      0 0 0.22rem rgba(228, 228, 231, 0.22),
+      0 0 0.45rem rgba(228, 228, 231, 0.12),
+      0 0 0.8rem rgba(228, 228, 231, 0.08);
+  }
+  to {
+    opacity: 0.86;
+    text-shadow:
+      0 0 0.35rem rgba(228, 228, 231, 0.38),
+      0 0 0.9rem rgba(228, 228, 231, 0.3),
+      0 0 1.3rem rgba(228, 228, 231, 0.2),
+      0 0 1.9rem rgba(228, 228, 231, 0.12);
+  }
+}
 
 .btn {
   position: relative;
@@ -162,5 +194,18 @@ html, body {
   .btn:active {
     transition: none;
     transform: none;
+  }
+
+  .prayer-hint,
+  .prayer-hint--visible,
+  .ambient-cue,
+  .ambient-cue--thinking {
+    animation: none;
+    text-shadow: none;
+  }
+
+  .prayer-hint--visible,
+  .ambient-cue--thinking {
+    opacity: var(--hint-visible-opacity);
   }
 }
