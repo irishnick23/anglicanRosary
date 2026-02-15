@@ -36,6 +36,18 @@ html, body {
   width: min(100%, var(--focus-max-width)); min-height: 90dvh;
   display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
 }
+.screen--start {
+  justify-content: flex-start;
+  gap: 1.25rem;
+  padding-top: clamp(56vh, 58vh, 62vh);
+}
+.title {
+  margin: 0;
+  font-size: clamp(2rem, 6.3vw, 3.1rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 1.6rem rgba(228, 228, 231, 0.16);
+}
 .screen--prayer { align-items: stretch; justify-content: space-between; text-align: left; padding: 2rem; }
 
 .prayer-main { display: flex; flex-direction: column; justify-content: center; gap: 1.25rem; flex: 1; }
@@ -64,5 +76,16 @@ html, body {
 
 .btn {
   border: 1px solid var(--line); background: transparent; border-radius: 0.5rem; padding: 0.75rem 1.5rem; cursor: pointer;
-  transition: border-color 180ms ease;
+  color: var(--fg);
+  font: inherit;
+  font-size: 1.02rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: border-color 180ms ease, box-shadow 220ms ease, background-color 220ms ease;
+}
+.btn:hover,
+.btn:focus-visible {
+  border-color: rgba(228, 228, 231, 0.55);
+  background: rgba(228, 228, 231, 0.07);
+  box-shadow: 0 0 1.1rem rgba(228, 228, 231, 0.15);
 }
