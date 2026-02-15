@@ -47,10 +47,11 @@ const breathEase = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 /* 3. PARTICLE ENGINE (Restored) */
 function startLoadVisual(canvas) {
   const ctx = canvas.getContext("2d");
+  let currentCyFactor = 0.36;
   let particles = Array.from({ length: 6500 }, () => ({
-    r: Math.pow(Math.random(), 2.5), theta: Math.random() * Math.PI * 2,
+    r: Math.pow(Math.random(), 1.45), theta: Math.random() * Math.PI * 2,
     tilt: (Math.random() - 0.5) * 0.8, phase: Math.random() * Math.PI * 2,
-    speed: 0.0001 + Math.random() * 0.0003, size: Math.random() < 0.98 ? 0.6 : 1.8
+    speed: 0.0001 + Math.random() * 0.0003, size: Math.random() < 0.9 ? 1.4 : 2.6
   }));
 
   function draw(now) {
@@ -61,16 +62,18 @@ function startLoadVisual(canvas) {
     const breath = 0.5 + 0.5 * Math.sin(now / 1500); // Simple breath loop
 
     const cx = canvas.width / 2;
-    const cy = session.status === "start" ? canvas.height * 0.36 : canvas.height / 2;
-    const currentRadius = (canvas.width * 0.5) * (1 + breath * 0.2);
-    const cloudAlpha = 0.52 + breath * 0.28 + ramp * 0.08;
+    const targetCyFactor = session.status === "start" ? 0.36 : 0.5;
+    currentCyFactor += (targetCyFactor - currentCyFactor) * 0.02;
+    const cy = canvas.height * currentCyFactor;
+    const currentRadius = (canvas.width * 0.68) * (1 + breath * 0.2);
+    const cloudAlpha = 0.62 + breath * 0.3 + ramp * 0.1;
 
     ctx.globalCompositeOperation = "lighter";
     particles.forEach(p => {
       const theta = p.theta + now * p.speed;
       const x = Math.cos(theta) * p.r, y = Math.sin(theta) * p.r * 0.4, z = p.tilt * p.r;
       const sX = cx + x * currentRadius, sY = cy + y * currentRadius;
-      ctx.fillStyle = `rgba(228,228,231,${(1.1 - p.r) * cloudAlpha * 0.3})`;
+      ctx.fillStyle = `rgba(228,228,231,${(1.1 - p.r) * cloudAlpha * 0.42})`;
       ctx.fillRect(sX, sY, p.size, p.size);
     });
     requestAnimationFrame(draw);
@@ -88,9 +91,6 @@ function render() {
   if (isSameNode && node.type === "prayer") {
     renderStickyPrayerBody(node);
   } else {
-    // Hide particles when entering a prayer screen
-    GLOBAL_CANVAS.style.opacity = node.type === "load" ? "1" : "0";
-    
     if (node.type === "load") {
       loadRampStart = Date.now();
       loadRampDuration = node.durationMs;
@@ -171,12 +171,16 @@ function renderPrayer(node) {
 function renderWithGhost(renderFn) {
   const activeScreen = APP.querySelector(".screen");
   if (!activeScreen) {
+    const node = flowNodes[session.nodeIndex];
+    GLOBAL_CANVAS.style.opacity = node?.type === "load" ? "1" : "0";
     renderFn();
     applyScreenState();
     return;
   }
   activeScreen.classList.add("screen--leaving");
   setTimeout(() => {
+    const node = flowNodes[session.nodeIndex];
+    GLOBAL_CANVAS.style.opacity = node?.type === "load" ? "1" : "0";
     renderFn();
     applyScreenState();
   }, DUR_GHOST_EXIT_MS);
