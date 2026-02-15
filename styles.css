@@ -27,7 +27,7 @@ html, body {
 
 #globalCloudCanvas {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  z-index: -1; pointer-events: none; opacity: 0; transition: opacity 1200ms ease-in-out;
+  z-index: 0; pointer-events: none; opacity: 0; transition: opacity 1200ms ease-in-out;
 }
 
 #app { position: relative; z-index: 1; min-height: 100dvh; width: 100%; display: grid; place-items: center; }
