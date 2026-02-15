@@ -27,6 +27,14 @@ const STANZAS_PER_PRAYER = {
     "And forgive us our trespasses,\nas we forgive them that trespass against us.",
     "And lead us not into temptation,\nbut deliver us from evil:",
     "For thine is the kingdom,\nand the power, and the glory,\nfor ever and ever. Amen."
+  ],
+  invitatory: [
+    "O God Make speed to save us.",
+    "O Lord Maker haste to help us"
+  ],
+  gloria: [
+    "Glory be to the Father, and to the Son and to the holy ghost",
+    "As it was in the beginning, is now and ever shall be world without end amen"
   ]
 };
 
@@ -49,9 +57,16 @@ const OPENING_SCREEN_ORDER = [
   {
     type: "prayer",
     kind: "invitatory",
-    title: "Invitatory / Gloria",
+    title: "Invitatory",
     meta: "Opening",
-    text: "O God, make speed to save us. O Lord, make haste to help us. Glory be to the Father, and to the Son, and to the Holy Ghost."
+    text: ""
+  },
+  {
+    type: "prayer",
+    kind: "gloria",
+    title: "Gloria",
+    meta: "Opening",
+    text: ""
   },
   { type: "load" }
 ];
