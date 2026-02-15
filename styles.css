@@ -15,8 +15,10 @@
   --focus-max-width: 44rem;
   --glow-speed: 12s;
   --glow-opacity: 1.00;
-  --hint-glow-speed: calc(var(--glow-speed) / 4);
-  --hint-visible-opacity: 0.72;
+  --hint-glow-speed: 8.4s;
+  --hint-visible-opacity: 0.2;
+  --hint-glow-opacity-min: 0.2;
+  --hint-glow-opacity-max: 0.55;
 }
 
 * { box-sizing: border-box; }
@@ -87,24 +89,33 @@ html, body {
 .prayer-hint--visible,
 .ambient-cue--thinking {
   opacity: var(--hint-visible-opacity);
-  animation: hint-glow var(--hint-glow-speed) ease-in-out infinite alternate;
+  animation: hint-glow var(--hint-glow-speed) linear infinite;
 }
 
 @keyframes hint-glow {
-  from {
-    opacity: 0.62;
+  0%, 2.381% {
+    opacity: var(--hint-glow-opacity-min);
     text-shadow:
-      0 0 0.22rem rgba(228, 228, 231, 0.22),
-      0 0 0.45rem rgba(228, 228, 231, 0.12),
-      0 0 0.8rem rgba(228, 228, 231, 0.08);
+      0 0 0.16rem rgba(228, 228, 231, 0.16),
+      0 0 0.32rem rgba(228, 228, 231, 0.1),
+      0 0 0.6rem rgba(228, 228, 231, 0.06);
+    animation-timing-function: cubic-bezier(0.33, 0, 0.67, 1);
   }
-  to {
-    opacity: 0.86;
+  38.095%, 40.476% {
+    opacity: var(--hint-glow-opacity-max);
     text-shadow:
-      0 0 0.35rem rgba(228, 228, 231, 0.38),
-      0 0 0.9rem rgba(228, 228, 231, 0.3),
-      0 0 1.3rem rgba(228, 228, 231, 0.2),
-      0 0 1.9rem rgba(228, 228, 231, 0.12);
+      0 0 0.28rem rgba(228, 228, 231, 0.28),
+      0 0 0.72rem rgba(228, 228, 231, 0.2),
+      0 0 1.1rem rgba(228, 228, 231, 0.14),
+      0 0 1.6rem rgba(228, 228, 231, 0.08);
+    animation-timing-function: cubic-bezier(0.33, 0, 0.67, 1);
+  }
+  100% {
+    opacity: var(--hint-glow-opacity-min);
+    text-shadow:
+      0 0 0.16rem rgba(228, 228, 231, 0.16),
+      0 0 0.32rem rgba(228, 228, 231, 0.1),
+      0 0 0.6rem rgba(228, 228, 231, 0.06);
   }
 }
 
