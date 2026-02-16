@@ -4,7 +4,7 @@ const GLOBAL_CANVAS = document.getElementById("globalCloudCanvas");
 /* 1. CONFIGURATION & FULL PRAYER TEXT */
 const SESSION_KEY = "anglican_rosary_v2";
 const DEFAULT_LOAD_MS = 7140;
-const DUR_GHOST_EXIT_MS = 600;
+const DUR_GHOST_EXIT_MS = 850;
 const DUR_REVEAL_NEXT_DELAY_MS = 2000;
 const PARTICLE_SPEED_SCALE = 0.62;
 const BREATH_CYCLE_MS = 10000;
@@ -205,11 +205,6 @@ function render() {
   if (isSameNode && node.type === "prayer") {
     renderStickyPrayerBody(node);
   } else {
-    if (node.type === "load") {
-      loadRampStart = Date.now();
-      loadRampDuration = node.durationMs;
-    }
-
     renderWithGhost(() => {
       if (node.type === "load") renderLoad(node);
       else renderPrayer(node);
@@ -239,6 +234,10 @@ function renderStart() {
 }
 
 function renderLoad(node) {
+  // Begin the timed load/ramp only after the outgoing prayer has fully exited.
+  loadRampStart = Date.now();
+  loadRampDuration = node.durationMs || DEFAULT_LOAD_MS;
+
   APP.innerHTML = `<section class="screen" id="loadScreen"></section>`;
   lastRenderedScreen = { type: "load", nodeIndex: session.nodeIndex };
 
@@ -284,17 +283,20 @@ function renderPrayer(node) {
 
 function renderWithGhost(renderFn) {
   const activeScreen = APP.querySelector(".screen");
+  const nextNode = flowNodes[session.nodeIndex];
   if (!activeScreen) {
-    const node = flowNodes[session.nodeIndex];
-    GLOBAL_CANVAS.style.opacity = node?.type === "load" ? "1" : "0";
+    GLOBAL_CANVAS.style.opacity = nextNode?.type === "load" ? "1" : "0";
     renderFn();
     applyScreenState();
     return;
   }
+  // Start canvas fade-in while the prayer screen exits to avoid a hard cut.
+  if (nextNode?.type === "load") {
+    GLOBAL_CANVAS.style.opacity = "1";
+  }
   activeScreen.classList.add("screen--leaving");
   setTimeout(() => {
-    const node = flowNodes[session.nodeIndex];
-    GLOBAL_CANVAS.style.opacity = node?.type === "load" ? "1" : "0";
+    GLOBAL_CANVAS.style.opacity = nextNode?.type === "load" ? "1" : "0";
     renderFn();
     applyScreenState();
   }, DUR_GHOST_EXIT_MS);
