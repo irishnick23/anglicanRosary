@@ -129,7 +129,7 @@ const breathEase = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 /* 3. PARTICLE ENGINE: The Breath of the Spirit */
 function startLoadVisual(canvas) {
   const ctx = canvas.getContext("2d");
-  let currentCyFactor = 0.41;
+  let currentCyFactor = 0.32;
   const particleCount = Math.min(
     PARTICLE_COUNT_BASELINE * PARTICLE_COUNT_MULTIPLIER,
     PARTICLE_COUNT_SAFETY_CAP
@@ -157,7 +157,7 @@ function startLoadVisual(canvas) {
     const targetCyFactor = session.status === "start" ? 0.41 : 0.5;
     currentCyFactor += (targetCyFactor - currentCyFactor) * DRIFT_SMOOTHNESS;
     const cy = canvas.height * currentCyFactor;
-    const currentRadius = (Math.min(canvas.width, canvas.height) * 0.62) * (1 + breath * 0.22);
+    const currentRadius = (Math.min(canvas.width, canvas.height) * 0.88) * (1 + breath * 0.35);
     const spiritGlow = 0.55 + breath * 0.35 + ramp * 0.08;
 
     const flameSway = Math.sin(now / 2200) * 0.018 + Math.sin(now / 900) * 0.008;
