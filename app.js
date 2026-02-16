@@ -6,9 +6,12 @@ const SESSION_KEY = "anglican_rosary_v2";
 const DEFAULT_LOAD_MS = 7140;
 const DUR_GHOST_EXIT_MS = 600;
 const DUR_REVEAL_NEXT_DELAY_MS = 2000;
-const PARTICLE_SPEED_SCALE = 0.5;
-const BREATH_CYCLE_MS = 5000;
-const DRIFT_SMOOTHNESS = 0.008;
+const PARTICLE_SPEED_SCALE = 0.62;
+const BREATH_CYCLE_MS = 10000;
+const DRIFT_SMOOTHNESS = 0.015;
+const PARTICLE_COUNT_BASELINE = 18000;
+const PARTICLE_COUNT_MULTIPLIER = 20;
+const PARTICLE_COUNT_SAFETY_CAP = 65000;
 
 const STANZAS_PER_PRAYER = {
   creed: [
@@ -123,37 +126,69 @@ let flowNodes = [];
 
 const breathEase = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 
-/* 3. PARTICLE ENGINE (Restored) */
+/* 3. PARTICLE ENGINE: The Breath of the Spirit */
 function startLoadVisual(canvas) {
   const ctx = canvas.getContext("2d");
-  let currentCyFactor = 0.36;
-  let particles = Array.from({ length: 6500 }, () => ({
-    r: Math.pow(Math.random(), 1.45), theta: Math.random() * Math.PI * 2,
-    tilt: (Math.random() - 0.5) * 0.8, phase: Math.random() * Math.PI * 2,
-    speed: 0.0001 + Math.random() * 0.0003, size: Math.random() < 0.9 ? 1.4 : 2.6
+  let currentCyFactor = 0.41;
+  const particleCount = Math.min(
+    PARTICLE_COUNT_BASELINE * PARTICLE_COUNT_MULTIPLIER,
+    PARTICLE_COUNT_SAFETY_CAP
+  );
+  const particles = Array.from({ length: particleCount }, () => ({
+    r: Math.pow(Math.random(), 1.85),
+    theta: Math.random() * Math.PI * 2,
+    speed: 0.000035 + Math.random() * 0.000055,
+    size: Math.random() < 0.96 ? 0.38 : 0.9,
+    wavePhase: Math.random() * Math.PI * 2,
+    depth: 0.7 + Math.random() * 0.6
   }));
 
   function draw(now) {
     if (!canvas.width) return requestAnimationFrame(draw);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Keep a subtle trail for cohesion, but clear faster so particles stay crisp.
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     const elapsed = Date.now() - loadRampStart;
     const ramp = loadRampDuration ? Math.min(1, elapsed / loadRampDuration) : 0;
     const breath = 0.5 + 0.5 * Math.sin(now / (BREATH_CYCLE_MS / (2 * Math.PI)));
 
     const cx = canvas.width / 2;
-    const targetCyFactor = session.status === "start" ? 0.36 : 0.5;
+    const targetCyFactor = session.status === "start" ? 0.41 : 0.5;
     currentCyFactor += (targetCyFactor - currentCyFactor) * DRIFT_SMOOTHNESS;
     const cy = canvas.height * currentCyFactor;
-    const currentRadius = (canvas.width * 0.68) * (1 + breath * 0.2);
-    const cloudAlpha = 0.62 + breath * 0.3 + ramp * 0.1;
+    const currentRadius = (Math.min(canvas.width, canvas.height) * 0.62) * (1 + breath * 0.22);
+    const spiritGlow = 0.55 + breath * 0.35 + ramp * 0.08;
 
+    const flameSway = Math.sin(now / 2200) * 0.018 + Math.sin(now / 900) * 0.008;
     ctx.globalCompositeOperation = "lighter";
     particles.forEach(p => {
+      const ripple = Math.sin(now / 1600 + p.wavePhase) * 0.032;
       const theta = p.theta + (now * p.speed * PARTICLE_SPEED_SCALE);
-      const x = Math.cos(theta) * p.r, y = Math.sin(theta) * p.r * 0.4, z = p.tilt * p.r;
-      const sX = cx + x * currentRadius, sY = cy + y * currentRadius;
-      ctx.fillStyle = `rgba(228,228,231,${(1.1 - p.r) * cloudAlpha * 0.42})`;
-      ctx.fillRect(sX, sY, p.size, p.size);
+      const radial = p.r + ripple;
+      const coreWeight = 1 - p.r;
+      const upliftPulse = 0.12 + 0.08 * Math.sin(now / 950 + p.wavePhase);
+      const flameLift = coreWeight * upliftPulse * (0.72 + breath * 0.28);
+      const taper = Math.max(0.5, 1 - flameLift * 1.2);
+      const dance = (
+        Math.sin(now / 1600 + p.wavePhase) +
+        0.6 * Math.sin(now / 760 + p.wavePhase * 1.7)
+      ) * 0.02 * coreWeight;
+      const x = Math.cos(theta) * radial * taper + dance + flameSway * coreWeight;
+      const y = Math.sin(theta) * radial * (1 + coreWeight * 0.18) - flameLift;
+      const sX = cx + x * currentRadius;
+      const sY = cy + y * currentRadius;
+      const alpha = Math.max(0.01, (1.1 - p.r) * spiritGlow * 0.24 * p.depth);
+
+      ctx.fillStyle = `rgba(228,228,231,${alpha})`;
+      const drawSize = p.size * (0.8 + breath * 0.22) * p.depth;
+      if (drawSize <= 0.95) {
+        ctx.fillRect(sX, sY, 1, 1);
+      } else {
+        ctx.beginPath();
+        ctx.arc(sX, sY, drawSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
     });
     requestAnimationFrame(draw);
   }
