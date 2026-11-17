@@ -163,7 +163,7 @@ function home(message = "") {
         </label>`).join("")}
       </fieldset>
       <label class="office-date">Date<input type="date" name="date" required></label>
-      <button class="office-begin">Begin prayer <span aria-hidden="true">→</span></button>
+      <button type="submit" class="btn">Begin prayer</button>
     </form>
     <small class="source">Book of Common Prayer (2019) · <a href="https://www.dailyoffice2019.com/">Daily Office 2019</a></small>
     <span role="status"></span>
