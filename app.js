@@ -115,27 +115,28 @@ let lastRenderedScreen = null;
 let loadTimerId = null;
 let flowNodes = [];
 
-// Each translucent sheet holds its own grain pattern. Bending narrow slices
-// of the sheets lets thousands of grains travel together without flickering.
 function startLoadVisual(canvas) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const width = 1200, height = 360;
-  const sheets = Array.from({ length: 5 }, (_, layer) => {
+  // Project grains from a softly lit volume into reusable layers.
+  const resolution = 640;
+  const layers = Array.from({ length: 5 }, (_, layer) => {
     const texture = document.createElement("canvas");
-    texture.width = width;
-    texture.height = height;
+    texture.width = texture.height = resolution;
     const paint = texture.getContext("2d");
     for (let i = 0; i < 26000; i++) {
-      const u = Math.random();
-      const envelope = Math.sin(Math.PI * u);
-      const spread = Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
-      const depth = i % 5 === 0 ? 38 : 8;
-      const y = height / 2 + envelope * (spread * depth + 32 * Math.sin(u * 7 + layer * 0.8));
-      paint.fillStyle = "rgba(234,231,224," + (envelope ** 1.5 * (0.12 + Math.random() * 0.58)) + ")";
-      const size = Math.random() < 0.04 ? 2.2 : 1.15;
-      paint.fillRect(u * width, y, size, size);
+      const angle = Math.random() * Math.PI * 2;
+      const z = 2 * Math.random() - 1;
+      const latitude = Math.sqrt(1 - z * z);
+      const radius = 0.39 * Math.cbrt(Math.random()) *
+        (0.88 + 0.20 * Math.random() + 0.035 * Math.sin(angle * 3 + layer));
+      const x = latitude * Math.cos(angle);
+      const y = latitude * Math.sin(angle);
+      const light = (1.6 - x - y + z) / 4;
+      const size = Math.random() < 0.025 ? 2.3 : 1.25;
+      paint.fillStyle = "rgba(236,231,219," + (0.07 + 0.69 * Math.max(0, light)) + ")";
+      paint.fillRect((0.5 + radius * x) * resolution, (0.5 + radius * y) * resolution, size, size);
     }
     return texture;
   });
@@ -143,26 +144,18 @@ function startLoadVisual(canvas) {
 
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Keep the original vertical silhouette while leaving air around both tips.
-    const verticalSpan = Math.min(canvas.width * 1.2, canvas.height * 1.35);
-    const span = Math.min(canvas.width * 0.86, verticalSpan);
-    const scale = span / width;
-    const verticalScale = verticalSpan / width;
+    const span = Math.min(canvas.width * 0.84, canvas.height * 0.53);
     const center = canvas.height * (session.status === "start" ? 0.39 : 0.5);
     ctx.globalCompositeOperation = "lighter";
-    sheets.forEach((sheet, layer) => {
-      const phase = layer * 0.69;
-      // Snap adjoining strips to the same pixel boundary to avoid seams.
-      const left = (canvas.width - span) / 2 + span * 0.018 * Math.sin(time * 0.13 + phase);
-      for (let x = 0; x < width; x += 8) {
-        const u = x / width;
-        const bend = Math.sin(u * 6.5 + phase + time * 0.15) * 0.08
-          + Math.sin(u * 10 - phase - time * 0.09) * 0.025;
-        const dx = Math.round(left + x * scale);
-        ctx.drawImage(sheet, x, 0, 8, height, dx,
-          center + verticalSpan * (bend + (layer - 2) * 0.018) - height * verticalScale / 2,
-          Math.round(left + (x + 8) * scale) - dx, height * verticalScale);
-      }
+    layers.forEach((texture, layer) => {
+      const phase = layer * 1.3;
+      const diameter = span * (1 + 0.027 * Math.sin(time * 0.22 + phase * 0.3));
+      ctx.save();
+      ctx.translate(canvas.width / 2 + span * 0.012 * Math.sin(time * 0.17 + phase),
+        center + span * 0.015 * Math.cos(time * 0.21 + phase));
+      ctx.rotate(0.23 * Math.sin(time * 0.09 + phase));
+      ctx.drawImage(texture, -diameter / 2, -diameter / 2, diameter, diameter);
+      ctx.restore();
     });
   }
 
