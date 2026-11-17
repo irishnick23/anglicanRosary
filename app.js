@@ -141,6 +141,13 @@ let index = 0;
 let activeRequest;
 let pauseTimer;
 
+const officeIcons = {
+  morning_prayer: '<path d="M2 17h20M5 21h14M6 17a6 6 0 0 1 12 0M12 3v4M3 9l2 2m16-2-2 2"/>',
+  midday_prayer: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/>',
+  evening_prayer: '<path d="M2 15h20M5 19h14M8 15a4 4 0 0 1 8 0M12 2v6m-3-3 3 3 3-3"/>',
+  compline: '<path d="M19.8 15.3A8.4 8.4 0 0 1 9 4a8.6 8.6 0 1 0 10.8 11.3Z"/>'
+};
+
 function home(message = "") {
   clearTimeout(pauseTimer);
   activeRequest?.abort();
@@ -149,15 +156,19 @@ function home(message = "") {
   APP.innerHTML = `<section class="screen screen--start">
     <h1 class="title">The Daily Office</h1>
     <form class="office-picker">
-      <label>Office<select name="office"></select></label>
-      <label>Date<input type="date" name="date" required></label>
-      <button class="btn">Begin prayer</button>
+      <fieldset class="office-options"><legend>Choose an office</legend>
+        ${Object.entries(offices).map(([key, name]) => `<label class="office-option">
+          <input type="radio" name="office" value="${key}" aria-label="${name}">
+          <span><svg viewBox="0 0 24 24" aria-hidden="true">${officeIcons[key]}</svg>${name.replace(" Prayer", "")}</span>
+        </label>`).join("")}
+      </fieldset>
+      <label class="office-date">Date<input type="date" name="date" required></label>
+      <button class="office-begin">Begin prayer <span aria-hidden="true">→</span></button>
     </form>
     <small class="source">Book of Common Prayer (2019) · <a href="https://www.dailyoffice2019.com/">Daily Office 2019</a></small>
     <span role="status"></span>
   </section>`;
   const form = APP.querySelector("form");
-  for (const [key, name] of Object.entries(offices)) form.elements.office.add(new Option(name, key));
   form.elements.office.value = office;
   form.elements.date.value = date;
   APP.querySelector("[role=status]").textContent = message;
