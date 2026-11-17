@@ -218,6 +218,25 @@ function servicePages(modules) {
   return result;
 }
 
+async function localOffice(day, selected) {
+  if (!window.bundledOfficeDates?.includes(day)) return null;
+  if (window.officeBundle?.date !== day) {
+    const script = document.createElement("script");
+    script.src = "./assets/offices/" + day + ".js";
+    try {
+      await new Promise((resolve, reject) => {
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.append(script);
+      });
+    } catch {
+      return null;
+    } finally { script.remove(); }
+  }
+  if (window.officeBundle?.date !== day) return null;
+  return window.officeBundle.services[selected];
+}
+
 async function beginOffice() {
   const controller = new AbortController();
   activeRequest = controller;
@@ -226,24 +245,31 @@ async function beginOffice() {
   const key = "office-kjv-v1/" + office + "/" + date;
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    let data;
-    try {
+    let data = { modules: await localOffice(date, office) };
+    if (session.status !== "loading" || controller !== activeRequest) return;
+    if (!data.modules?.length) try {
       const response = await fetch("https://api.dailyoffice2019.com/api/v1/office/" + office + "/" + date + "?bible_translation=kjv", {signal: controller.signal});
       if (!response.ok) throw Error();
       data = await response.json();
       if (!data.modules?.length) throw Error();
       try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
     } catch {
-      data = JSON.parse(localStorage.getItem(key));
+      data = JSON.parse(localStorage.getItem(key)) || {};
     }
     if (session.status !== "loading" || controller !== activeRequest) return;
-    pages = servicePages(data.modules);
+    pages = servicePages(data.modules || []);
     if (!pages.length) throw Error();
     index = 0;
     showPrayer();
   } catch {
-    if (session.status === "loading" && controller === activeRequest)
-      home("This office could not be loaded. Check your connection and try again.");
+    if (session.status === "loading" && controller === activeRequest) {
+      home("This date is unavailable here. ");
+      const link = document.createElement("a");
+      link.href = "https://www.dailyoffice2019.com/" + office + "/" + date.replaceAll("-", "/");
+      link.textContent = "Open " + offices[office] + " at Daily Office 2019";
+      link.className = "source";
+      APP.querySelector("[role=status]").append(link);
+    }
   } finally { clearTimeout(timeout); }
 }
 
