@@ -146,23 +146,42 @@ function startLoadVisual(canvas) {
     }
     return texture;
   });
+  const cloud = document.createElement("canvas");
+  cloud.width = cloud.height = resolution;
+  const cloudPaint = cloud.getContext("2d");
+  cloudPaint.globalCompositeOperation = "lighter";
   let frame = 0, last = 0, time = 0;
 
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const span = Math.min(canvas.width * 0.84, canvas.height * 0.53);
     const center = canvas.height * (session.status === "start" ? 0.39 : 0.5);
-    ctx.globalCompositeOperation = "lighter";
+    const breath = time * Math.PI * 2 / 15;
+    cloudPaint.clearRect(0, 0, resolution, resolution);
     layers.forEach((texture, layer) => {
       const phase = layer * 1.3;
-      const diameter = span * (1 + 0.027 * Math.sin(time * 0.22 + phase * 0.3));
-      ctx.save();
-      ctx.translate(canvas.width / 2 + span * 0.012 * Math.sin(time * 0.17 + phase),
-        center + span * 0.015 * Math.cos(time * 0.21 + phase));
-      ctx.rotate(0.23 * Math.sin(time * 0.09 + phase));
-      ctx.drawImage(texture, -diameter / 2, -diameter / 2, diameter, diameter);
-      ctx.restore();
+      cloudPaint.save();
+      cloudPaint.translate(resolution / 2, resolution / 2);
+      cloudPaint.rotate(0.18 * Math.sin(time * 0.09 + phase));
+      cloudPaint.drawImage(texture, -resolution / 2, -resolution / 2);
+      cloudPaint.restore();
     });
+
+    // A broad swell travels across the grains. Align slice edges on device
+    // pixels so adjacent columns stay joined throughout the breath.
+    const width = span * (1 - 0.035 * Math.sin(breath));
+    const left = (canvas.width - width) / 2;
+    for (let x = 0; x < resolution; x += 4) {
+      const u = (x + 2) / resolution - 0.5;
+      const wave = breath - u * 5.2;
+      const height = span * (1 + 0.16 * Math.sin(wave)
+        + 0.035 * Math.sin(time * 0.19 + u * 7));
+      const lift = span * 0.047 * Math.cos(wave);
+      const start = Math.round(left + width * x / resolution);
+      const end = Math.round(left + width * (x + 4) / resolution);
+      ctx.drawImage(cloud, x, 0, 4, resolution, start,
+        center + lift - height / 2, end - start, height);
+    }
   }
 
   function tick(now) {
