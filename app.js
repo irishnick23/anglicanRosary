@@ -1,119 +1,7 @@
 const APP = document.getElementById("app");
 const GLOBAL_CANVAS = document.getElementById("globalCloudCanvas");
 
-/* 1. CONFIGURATION & FULL PRAYER TEXT */
-const SESSION_KEY = "anglican_rosary_v2";
-const DEFAULT_LOAD_MS = 7140;
-const DUR_GHOST_EXIT_MS = 850;
-const DUR_REVEAL_NEXT_DELAY_MS = 2000;
-const STANZAS_PER_PRAYER = {
-  creed: [
-    "I believe in God, the Father Almighty,\nthe Maker of heaven and earth:",
-    "And in Jesus Christ his only Son our Lord:\nWho was conceived by the Holy Ghost,\nBorn of the Virgin Mary:",
-    "Suffered under Pontius Pilate,\nWas crucified, dead, and buried:\nHe descended into hell;",
-    "The third day he rose again from the dead:\nHe ascended into heaven,\nAnd sitteth on the right hand of God the Father Almighty:",
-    "From thence he shall come\nto judge the quick and the dead.",
-    "I believe in the Holy Ghost:\nThe holy catholic church;\nThe communion of saints:",
-    "The forgiveness of sins:\nThe resurrection of the body,\nAnd the life everlasting. Amen."
-  ],
-  lords_prayer: [
-    "Our Father which art in heaven,\nhallowed be thy name.",
-    "Thy kingdom come,\nThy will be done in earth,\nas it is in heaven.",
-    "Give us this day our daily bread.",
-    "And forgive us our trespasses,\nas we forgive them that trespass against us.",
-    "And lead us not into temptation,\nbut deliver us from evil:",
-    "For thine is the kingdom,\nand the power, and the glory,\nfor ever and ever. Amen."
-  ],
-  invitatory: [
-    "O God, make speed to save us.",
-    "O Lord, make haste to help us."
-  ],
-  gloria: [
-    "Glory be to the Father, and to the Son, and to the Holy Ghost;",
-    "As it was in the beginning, is now, and ever shall be, world without end. Amen."
-  ]
-};
-
-const MYSTERIES = [
-  "By the Mystery of Thy Holy Incarnation;", "By Thy Holy Nativity and Circumcision;",
-  "By Thy Baptism, Fasting, and Temptation;", "By Thine Agony and Bloody Sweat;",
-  "By Thy Cross and Passion;", "By Thy Precious Death and Burial;",
-  "By Thy Glorious Resurrection;", "By the coming of the Holy Ghost;"
-];
-
-const OPENING_SCREEN_ORDER = [
-  { type: "load" },
-  {
-    type: "prayer",
-    kind: "creed",
-    title: "Apostles' Creed",
-    meta: "Opening"
-  },
-  { type: "load" },
-  {
-    type: "prayer",
-    kind: "invitatory",
-    title: "Invitatory",
-    meta: "Opening",
-    text: ""
-  },
-  {
-    type: "prayer",
-    kind: "gloria",
-    title: "Gloria",
-    meta: "Opening",
-    text: ""
-  },
-  { type: "load" }
-];
-
-const INVOCATIONS_PER_MYSTERY = 7;
-const INVOCATION_TEXT = "God the Son, Redeemer of the World: have mercy upon us miserable Sinners.";
-
-function createLoadNode(step = {}) {
-  return { type: "load", durationMs: step.durationMs || DEFAULT_LOAD_MS };
-}
-
-function createSinglePassMysteryNodes() {
-  const nodes = [];
-
-  nodes.push({
-    type: "prayer",
-    kind: "lords_prayer",
-    title: "The Lord's Prayer",
-    meta: "Main Sequence"
-  });
-  nodes.push(createLoadNode());
-
-  for (let mysteryIndex = 1; mysteryIndex <= MYSTERIES.length; mysteryIndex += 1) {
-    nodes.push({
-      type: "prayer",
-      kind: `mystery_${mysteryIndex}`,
-      title: `Mystery ${mysteryIndex}`,
-      meta: "Main Sequence",
-      text: MYSTERIES[mysteryIndex - 1] || "By thy cross and passion;"
-    });
-
-    for (let bead = 1; bead <= INVOCATIONS_PER_MYSTERY; bead += 1) {
-      nodes.push({
-        type: "prayer",
-        kind: `invocation_${mysteryIndex}_${bead}`,
-        title: "Invocation",
-        meta: `Mystery ${mysteryIndex} · Bead ${bead}`,
-        text: INVOCATION_TEXT
-      });
-    }
-    nodes.push(createLoadNode());
-  }
-
-  return nodes;
-}
-
-/* 2. STATE ENGINE */
-let session = { status: "start", nodeIndex: -1, nodeProgress: {} };
-let lastRenderedScreen = null;
-let loadTimerId = null;
-let flowNodes = [];
+const session = { status: "start" };
 
 function startLoadVisual(canvas) {
   const ctx = canvas.getContext("2d");
@@ -236,247 +124,161 @@ function startLoadVisual(canvas) {
   resize();
 }
 
-/* 4. REFINED RENDERING (Fixes Double Load & Particle Visibility) */
-function render() {
-  const node = flowNodes[session.nodeIndex];
-  if (!node) return;
+const offices = {
+  morning_prayer: "Morning Prayer",
+  midday_prayer: "Midday Prayer",
+  evening_prayer: "Evening Prayer",
+  compline: "Compline"
+};
+const now = new Date();
+const hour = now.getHours();
+let office = hour < 4 || hour >= 21 ? "compline" : hour < 11 ? "morning_prayer" :
+  hour < 16 ? "midday_prayer" : "evening_prayer";
+let date = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+  .map(n => String(n).padStart(2, "0")).join("-");
+let pages = [];
+let index = 0;
+let activeRequest;
+let pauseTimer;
 
-  const isSameNode = lastRenderedScreen?.nodeIndex === session.nodeIndex;
-
-  if (isSameNode && node.type === "prayer") {
-    renderStickyPrayerBody(node);
-  } else {
-    renderWithGhost(() => {
-      if (node.type === "load") renderLoad(node);
-      else renderPrayer(node);
-    });
-  }
-}
-
-function renderStart() {
-  if (loadTimerId) {
-    clearTimeout(loadTimerId);
-    loadTimerId = null;
-  }
-
-  // Show particles immediately on the start screen.
+function home(message = "") {
+  clearTimeout(pauseTimer);
+  activeRequest?.abort();
+  session.status = "start";
   GLOBAL_CANVAS.style.opacity = "1";
-
-
-  lastRenderedScreen = { type: "start", nodeIndex: -1 };
-  APP.innerHTML = `
-    <section class="screen screen--start">
-      <h1 class="title">Anglican Rosary</h1>
-      <button class="btn" id="startButton" type="button">Start</button>
-    </section>
-  `;
-}
-
-function renderLoad(node) {
-
-  APP.innerHTML = `<section class="screen" id="loadScreen"></section>`;
-  lastRenderedScreen = { type: "load", nodeIndex: session.nodeIndex };
-
-  if (loadTimerId) clearTimeout(loadTimerId);
-  loadTimerId = setTimeout(() => {
-    loadTimerId = null;
-    advanceToNextNode();
-  }, node.durationMs || DEFAULT_LOAD_MS);
-}
-
-function renderPrayer(node) {
-  if (loadTimerId) {
-    clearTimeout(loadTimerId);
-    loadTimerId = null;
-  }
-
-  const nodeProgress = getNodeProgress(session.nodeIndex, node);
-  const initialState = getPrayerFlowState(node, nodeProgress);
-
-  APP.innerHTML = `
-    <section class="screen screen--prayer" id="prayerScreen">
-      <div class="prayer-main">
-        <div class="prayer-header">
-          <p class="meta">${node.meta || ""}</p>
-          <h2 class="prayer-title">${node.title || ""}</h2>
-        </div>
-        <div id="prayerFlow">${initialState.markup}</div>
-      </div>
-      <footer class="actions">
-        <p class="prayer-hint" id="prayerHint">Tap anywhere to continue</p>
-      </footer>
-    </section>
-  `;
-  updateHint(initialState.canAdvance || initialState.canProgress);
-
-  lastRenderedScreen = {
-    type: "prayer",
-    nodeIndex: session.nodeIndex,
-    stanzaIndex: nodeProgress.stanzaIndex,
-    pairIndex: nodeProgress.pairIndex
+  APP.innerHTML = `<section class="screen screen--start">
+    <h1 class="title">The Daily Office</h1>
+    <form class="office-picker">
+      <label>Office<select name="office"></select></label>
+      <label>Date<input type="date" name="date" required></label>
+      <button class="btn">Begin prayer</button>
+    </form>
+    <small class="source">Book of Common Prayer (2019) · <a href="https://www.dailyoffice2019.com/">Daily Office 2019</a></small>
+    <span role="status"></span>
+  </section>`;
+  const form = APP.querySelector("form");
+  for (const [key, name] of Object.entries(offices)) form.elements.office.add(new Option(name, key));
+  form.elements.office.value = office;
+  form.elements.date.value = date;
+  APP.querySelector("[role=status]").textContent = message;
+  form.onsubmit = event => {
+    event.preventDefault();
+    office = form.elements.office.value;
+    date = form.elements.date.value;
+    beginOffice();
   };
 }
 
-function renderWithGhost(renderFn) {
-  const activeScreen = APP.querySelector(".screen");
-  const nextNode = flowNodes[session.nodeIndex];
-  if (!activeScreen) {
-    GLOBAL_CANVAS.style.opacity = nextNode?.type === "load" ? "1" : "0";
-    renderFn();
-    applyScreenState();
-    return;
-  }
-  // Start canvas fade-in while the prayer screen exits to avoid a hard cut.
-  if (nextNode?.type === "load") {
-    GLOBAL_CANVAS.style.opacity = "1";
-  }
-  activeScreen.classList.add("screen--leaving");
-  setTimeout(() => {
-    GLOBAL_CANVAS.style.opacity = nextNode?.type === "load" ? "1" : "0";
-    renderFn();
-    applyScreenState();
-  }, DUR_GHOST_EXIT_MS);
-}
-
-function applyScreenState() {
-  const screen = APP.querySelector(".screen");
-  if (screen) {
-    screen.classList.add("screen--entering");
-    requestAnimationFrame(() => screen.classList.add("screen--entered"));
-  }
-}
-
-function renderStickyPrayerBody(node) {
-  const progress = getNodeProgress(session.nodeIndex, node);
-  const flowState = getPrayerFlowState(node, progress);
-  const prayerFlow = document.getElementById("prayerFlow");
-
-  // FIX: Only re-render the stanza if the index actually changed
-  if (lastRenderedScreen?.stanzaIndex !== progress.stanzaIndex || lastRenderedScreen?.pairIndex !== progress.pairIndex) {
-    const current = prayerFlow.querySelector(".stanza-wrap") || prayerFlow.firstChild;
-    if (current && current.classList) current.classList.add("stanza--leaving");
-
-    setTimeout(() => {
-      prayerFlow.innerHTML = flowState.markup;
-      updateHint(flowState.canAdvance || flowState.canProgress);
-    }, 400);
-  } else {
-    // If just a timer update, only show the hint
-    updateHint(flowState.canAdvance || flowState.canProgress);
-  }
-
-  lastRenderedScreen = { ...lastRenderedScreen, stanzaIndex: progress.stanzaIndex, pairIndex: progress.pairIndex };
-}
-
-function updateHint(visible) {
-  const hint = document.getElementById("prayerHint");
-  if (hint) hint.classList.toggle("prayer-hint--visible", visible);
-}
-
-/* 5. INTERACTION & BOOTSTRAP */
-let lastTouchTime = 0;
-
-function handleTap(e) {
-  if (e.target.closest(".dev-zone")) return;
-
-  if (session.status === "start") {
-    if (e.target.closest("#startButton")) {
-      startRound();
+function servicePages(modules) {
+  const result = [];
+  for (const module of modules) {
+    let title = module.name, lines = [], length = 0;
+    function flush() {
+      if (lines.length) result.push({ section: module.name, title, lines });
+      lines = [];
+      length = 0;
     }
-    return;
+    for (const line of module.lines) {
+      const type = line.line_type;
+      if (["spacer", "audio"].includes(type)) { flush(); continue; }
+      const fragment = document.createElement("template");
+      fragment.innerHTML = String(line.content ?? "");
+      fragment.content.querySelectorAll("script,style,.footnotes,.crossrefs,sup.footnote").forEach(el => el.remove());
+      fragment.content.querySelectorAll("br,p,div,h3,h4").forEach(el => el.append(" "));
+      const content = fragment.content.textContent.replace(/\s+/g, " ").trim();
+      if (!content) continue;
+      if (type === "heading") { flush(); title = content; continue; }
+      let phrase = line.preface ? String(line.preface) + " " : "";
+      for (const word of content.split(" ")) {
+        if (phrase.length > 230 && (/[.!?;:,]$/.test(phrase.trimEnd()) || phrase.length > 310)) {
+          if (length + phrase.length > 340) flush();
+          lines.push({ type, text: phrase.trim() });
+          flush();
+          phrase = "";
+        }
+        phrase += word + " ";
+      }
+      if (length + phrase.length > 340) flush();
+      lines.push({ type, text: phrase.trim() });
+      length += phrase.length;
+    }
+    flush();
   }
-
-  if (session.status === "in_progress") {
-    handleGlobalAdvance();
-  }
+  return result;
 }
 
-window.addEventListener("touchend", (e) => {
-  lastTouchTime = Date.now();
-  handleTap(e);
+async function beginOffice() {
+  const controller = new AbortController();
+  activeRequest = controller;
+  session.status = "loading";
+  APP.innerHTML = '<section class="screen"><p>Preparing your office…</p><button class="quiet" data-home>Back</button></section>';
+  const key = "office-kjv-v1/" + office + "/" + date;
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    let data;
+    try {
+      const response = await fetch("https://api.dailyoffice2019.com/api/v1/office/" + office + "/" + date + "?bible_translation=kjv", {signal: controller.signal});
+      if (!response.ok) throw Error();
+      data = await response.json();
+      if (!data.modules?.length) throw Error();
+      try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
+    } catch {
+      data = JSON.parse(localStorage.getItem(key));
+    }
+    if (session.status !== "loading" || controller !== activeRequest) return;
+    pages = servicePages(data.modules);
+    if (!pages.length) throw Error();
+    index = 0;
+    showPrayer();
+  } catch {
+    if (session.status === "loading" && controller === activeRequest)
+      home("This office could not be loaded. Check your connection and try again.");
+  } finally { clearTimeout(timeout); }
+}
+
+function showPrayer() {
+  session.status = "prayer";
+  GLOBAL_CANVAS.style.opacity = "0";
+  const page = pages[index];
+  APP.innerHTML = `<section class="screen screen--prayer">
+    <div class="prayer-main"><header><span class="meta"></span><h2 class="prayer-title"></h2></header>
+    <div class="stanza-wrap prayer-text"></div></div>
+    <footer><button class="quiet" data-home>Offices</button><button class="quiet" data-back>Back</button>
+    <button class="quiet" data-next></button></footer></section>`;
+  APP.querySelector(".meta").textContent = offices[office] + " · " + date;
+  APP.querySelector("h2").textContent = page.title;
+  const stanza = APP.querySelector(".stanza-wrap");
+  for (const line of page.lines) {
+    const p = document.createElement("p");
+    p.className = "line-" + line.type;
+    p.textContent = line.text;
+    stanza.append(p);
+  }
+  APP.querySelector("[data-back]").disabled = index === 0;
+  APP.querySelector("[data-next]").textContent = index === pages.length - 1 ? "Finish" : "Continue";
+  window.scrollTo(0, 0);
+}
+
+function next() {
+  index++;
+  if (index >= pages.length) return home("Office complete.");
+  if (pages[index].section === pages[index - 1].section) return showPrayer();
+  session.status = "pause";
+  GLOBAL_CANVAS.style.opacity = "1";
+  APP.innerHTML = '<section class="screen screen--start"><p class="meta"></p><button class="quiet" data-skip>Continue</button></section>';
+  APP.querySelector(".meta").textContent = pages[index].section;
+  pauseTimer = setTimeout(showPrayer, 7140);
+}
+APP.addEventListener("click", event => {
+  if (event.target.closest("[data-skip]")) { clearTimeout(pauseTimer); return showPrayer(); }
+  if (event.target.closest("[data-home]")) return home();
+  if (session.status !== "prayer") return;
+  if (event.target.closest("[data-back]")) { if (index > 0) { index--; showPrayer(); } }
+  else if (!window.getSelection()?.toString()) next();
 });
-
-window.addEventListener("click", (e) => {
-  if (Date.now() - lastTouchTime < 500) return;
-  handleTap(e);
+window.addEventListener("keydown", event => {
+  if (session.status !== "prayer" || event.repeat || event.target.closest("button")) return;
+  if ([" ", "Enter", "ArrowRight"].includes(event.key)) { event.preventDefault(); next(); }
 });
-
-function handleGlobalAdvance() {
-  const node = flowNodes[session.nodeIndex];
-  if (!node || node.type !== "prayer") return;
-  const progress = getNodeProgress(session.nodeIndex, node);
-  const state = getPrayerFlowState(node, progress);
-  if (state.canProgress) { state.onTap(); render(); }
-  else if (state.canAdvance) advanceToNextNode();
-}
-
-function buildFlowTimeline() {
-  const nodes = [];
-
-  OPENING_SCREEN_ORDER.forEach((step) => {
-    if (step.type === "load") {
-      nodes.push(createLoadNode(step));
-      return;
-    }
-
-    if (step.type === "prayer") {
-      nodes.push({ ...step });
-    }
-  });
-
-  nodes.push(...createSinglePassMysteryNodes());
-
-  return nodes;
-}
-
-function getNodeProgress(index, node) {
-  if (!session.nodeProgress[index]) {
-    session.nodeProgress[index] = {
-      stanzaIndex: 0,
-      pairIndex: 0,
-      nextVisibleAtEpochMs: null
-    };
-  }
-  return session.nodeProgress[index];
-}
-
-function getPrayerFlowState(node, progress) {
-  const stanzas = STANZAS_PER_PRAYER[node.kind] || [node.text];
-  const isFinal = progress.stanzaIndex >= stanzas.length - 1;
-  return {
-    canProgress: !isFinal,
-    canAdvance: isFinal,
-    markup: `<div class="stanza-wrap"><p class="prayer-text">${stanzas[progress.stanzaIndex]}</p></div>`,
-    onTap: () => { progress.stanzaIndex += 1; }
-  };
-}
-
-function advanceToNextNode() {
-  if (session.nodeIndex + 1 >= flowNodes.length) {
-    session.status = "start";
-    session.nodeIndex = -1;
-    session.nodeProgress = {};
-    renderStart();
-    return;
-  }
-
-  session.nodeIndex += 1;
-  render();
-}
-
-function startRound() {
-  session.status = "in_progress";
-  session.nodeIndex = 0;
-  session.nodeProgress = {};
-  lastRenderedScreen = null;
-  render();
-}
-
-/* Initialize App */
-function init() {
-  startLoadVisual(GLOBAL_CANVAS);
-  flowNodes = buildFlowTimeline();
-  renderStart();
-}
-
-init();
+startLoadVisual(GLOBAL_CANVAS);
+home();

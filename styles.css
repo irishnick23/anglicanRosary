@@ -294,3 +294,18 @@ body::after {
     opacity: var(--hint-visible-opacity);
   }
 }
+
+html, body { overflow-y: auto; }
+.screen--start { padding: max(48dvh, 12rem) 1rem 4dvh; gap: .7rem; }
+.office-picker { display: flex; flex-wrap: wrap; justify-content: center; align-items: end; gap: .8rem; }
+.office-picker label { display: grid; text-align: left; font-size: .8rem; color: #aaa; }
+.office-picker select, .office-picker input { color-scheme: dark; background: #101010; color: var(--fg); border: 1px solid var(--line); border-radius: .4rem; padding: .55rem; min-height: 44px; font: inherit; }
+.source, .source a { color: #aaa; }
+.screen--prayer footer { display: flex; justify-content: space-between; gap: .5rem; }
+.quiet { background: transparent; color: inherit; border: 0; min-height: 44px; cursor: pointer; font: inherit; }
+.quiet:disabled { opacity: .25; }
+.stanza-wrap p { margin: .2em 0; }
+.line-rubric, .line-citation, .line-subheading { color: #aaa; font-size: .88em; }
+.line-rubric { font-style: italic; }
+.line-congregation, .line-congregation_dialogue { color: #fff; }
+@media (prefers-reduced-motion: reduce) { .stanza-wrap { animation: none; } }
