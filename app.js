@@ -136,7 +136,13 @@ function startLoadVisual(canvas) {
       const light = (1.6 - x - y + z) / 4;
       const size = Math.random() < 0.025 ? 2.3 : 1.25;
       paint.fillStyle = "rgba(236,231,219," + (0.07 + 0.69 * Math.max(0, light)) + ")";
-      paint.fillRect((0.5 + radius * x) * resolution, (0.5 + radius * y) * resolution, size, size);
+      // Shear and taper the whole volume so its outline feels wind-shaped.
+      const across = radius * x;
+      const rise = radius * y;
+      const driftX = across * 1.08 + 0.18 * rise;
+      const driftY = rise * (0.68 - 0.48 * across) - 0.18 * across
+        + 0.045 * Math.sin(across * 9 + layer * 0.18);
+      paint.fillRect((0.5 + driftX) * resolution, (0.5 + driftY) * resolution, size, size);
     }
     return texture;
   });
