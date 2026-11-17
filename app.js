@@ -6,13 +6,6 @@ const SESSION_KEY = "anglican_rosary_v2";
 const DEFAULT_LOAD_MS = 7140;
 const DUR_GHOST_EXIT_MS = 850;
 const DUR_REVEAL_NEXT_DELAY_MS = 2000;
-const PARTICLE_SPEED_SCALE = 0.62;
-const BREATH_CYCLE_MS = 10000;
-const DRIFT_SMOOTHNESS = 0.015;
-const PARTICLE_COUNT_BASELINE = 18000;
-const PARTICLE_COUNT_MULTIPLIER = 20;
-const PARTICLE_COUNT_SAFETY_CAP = 65000;
-
 const STANZAS_PER_PRAYER = {
   creed: [
     "I believe in God, the Father Almighty,\nthe Maker of heaven and earth:",
@@ -119,80 +112,86 @@ function createSinglePassMysteryNodes() {
 /* 2. STATE ENGINE */
 let session = { status: "start", nodeIndex: -1, nodeProgress: {} };
 let lastRenderedScreen = null;
-let loadRampStart = 0;
-let loadRampDuration = 0;
 let loadTimerId = null;
 let flowNodes = [];
 
-const breathEase = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-
-/* 3. PARTICLE ENGINE: The Breath of the Spirit */
+// Each translucent sheet holds its own grain pattern. Bending narrow slices
+// of the sheets lets thousands of grains travel together without flickering.
 function startLoadVisual(canvas) {
   const ctx = canvas.getContext("2d");
-  let currentCyFactor = 0.32;
-  const particleCount = Math.min(
-    PARTICLE_COUNT_BASELINE * PARTICLE_COUNT_MULTIPLIER,
-    PARTICLE_COUNT_SAFETY_CAP
-  );
-  const particles = Array.from({ length: particleCount }, () => ({
-    r: Math.pow(Math.random(), 1.85),
-    theta: Math.random() * Math.PI * 2,
-    speed: 0.000035 + Math.random() * 0.000055,
-    size: Math.random() < 0.96 ? 0.38 : 0.9,
-    wavePhase: Math.random() * Math.PI * 2,
-    depth: 0.7 + Math.random() * 0.6
-  }));
+  if (!ctx) return;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const width = 1200, height = 360;
+  const sheets = Array.from({ length: 5 }, (_, layer) => {
+    const texture = document.createElement("canvas");
+    texture.width = width;
+    texture.height = height;
+    const paint = texture.getContext("2d");
+    for (let i = 0; i < 26000; i++) {
+      const u = Math.random();
+      const envelope = Math.sin(Math.PI * u);
+      const spread = Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+      const depth = i % 5 === 0 ? 38 : 8;
+      const y = height / 2 + envelope * (spread * depth + 32 * Math.sin(u * 7 + layer * 0.8));
+      paint.fillStyle = "rgba(234,231,224," + (envelope ** 1.5 * (0.12 + Math.random() * 0.58)) + ")";
+      const size = Math.random() < 0.04 ? 2.2 : 1.15;
+      paint.fillRect(u * width, y, size, size);
+    }
+    return texture;
+  });
+  let frame = 0, last = 0, time = 0;
 
-  function draw(now) {
-    if (!canvas.width) return requestAnimationFrame(draw);
-    // Keep a subtle trail for cohesion, but clear faster so particles stay crisp.
-    ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "rgba(0,0,0,0.42)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const elapsed = Date.now() - loadRampStart;
-    const ramp = loadRampDuration ? Math.min(1, elapsed / loadRampDuration) : 0;
-    const breath = 0.5 + 0.5 * Math.sin(now / (BREATH_CYCLE_MS / (2 * Math.PI)));
-
-    const cx = canvas.width / 2;
-    const targetCyFactor = session.status === "start" ? 0.41 : 0.5;
-    currentCyFactor += (targetCyFactor - currentCyFactor) * DRIFT_SMOOTHNESS;
-    const cy = canvas.height * currentCyFactor;
-    const currentRadius = (Math.min(canvas.width, canvas.height) * 0.88) * (1 + breath * 0.35);
-    const spiritGlow = 0.55 + breath * 0.35 + ramp * 0.08;
-
-    const flameSway = Math.sin(now / 2200) * 0.018 + Math.sin(now / 900) * 0.008;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const span = Math.min(canvas.width * 1.2, canvas.height * 1.35);
+    const scale = span / width;
+    const center = canvas.height * (session.status === "start" ? 0.39 : 0.5);
     ctx.globalCompositeOperation = "lighter";
-    particles.forEach(p => {
-      const ripple = Math.sin(now / 1600 + p.wavePhase) * 0.032;
-      const theta = p.theta + (now * p.speed * PARTICLE_SPEED_SCALE);
-      const radial = p.r + ripple;
-      const coreWeight = 1 - p.r;
-      const upliftPulse = 0.12 + 0.08 * Math.sin(now / 950 + p.wavePhase);
-      const flameLift = coreWeight * upliftPulse * (0.72 + breath * 0.28);
-      const taper = Math.max(0.5, 1 - flameLift * 1.2);
-      const dance = (
-        Math.sin(now / 1600 + p.wavePhase) +
-        0.6 * Math.sin(now / 760 + p.wavePhase * 1.7)
-      ) * 0.02 * coreWeight;
-      const x = Math.cos(theta) * radial * taper + dance + flameSway * coreWeight;
-      const y = Math.sin(theta) * radial * (1 + coreWeight * 0.18) - flameLift;
-      const sX = cx + x * currentRadius;
-      const sY = cy + y * currentRadius;
-      const alpha = Math.max(0.01, (1.1 - p.r) * spiritGlow * 0.24 * p.depth);
-
-      ctx.fillStyle = `rgba(228,228,231,${alpha})`;
-      const drawSize = p.size * (0.8 + breath * 0.22) * p.depth;
-      if (drawSize <= 0.95) {
-        ctx.fillRect(sX, sY, 1, 1);
-      } else {
-        ctx.beginPath();
-        ctx.arc(sX, sY, drawSize, 0, Math.PI * 2);
-        ctx.fill();
+    sheets.forEach((sheet, layer) => {
+      const phase = layer * 0.69;
+      // Snap adjoining strips to the same pixel boundary to avoid seams.
+      const left = (canvas.width - span) / 2 + span * 0.018 * Math.sin(time * 0.13 + phase);
+      for (let x = 0; x < width; x += 8) {
+        const u = x / width;
+        const bend = Math.sin(u * 6.5 + phase + time * 0.15) * 0.08
+          + Math.sin(u * 10 - phase - time * 0.09) * 0.025;
+        const dx = Math.round(left + x * scale);
+        ctx.drawImage(sheet, x, 0, 8, height, dx,
+          center + span * (bend + (layer - 2) * 0.018) - height * scale / 2,
+          Math.round(left + (x + 8) * scale) - dx, height * scale);
       }
     });
-    requestAnimationFrame(draw);
   }
-  draw(0);
+
+  function tick(now) {
+    if (!last || now - last >= 32) {
+      if (last) time += Math.min(now - last, 100) / 1000;
+      last = now;
+      draw();
+    }
+    frame = requestAnimationFrame(tick);
+  }
+
+  function sync() {
+    cancelAnimationFrame(frame);
+    last = 0;
+    if (document.hidden || getComputedStyle(canvas).opacity === "0" && canvas.style.opacity === "0") return;
+    draw();
+    if (!reduced.matches) frame = requestAnimationFrame(tick);
+  }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(canvas.clientWidth * dpr);
+    canvas.height = Math.round(canvas.clientHeight * dpr);
+    sync();
+  }
+  new MutationObserver(sync).observe(canvas, { attributes: true, attributeFilter: ["style"] });
+  canvas.addEventListener("transitionend", sync);
+  document.addEventListener("visibilitychange", sync);
+  reduced.addEventListener("change", sync);
+  window.addEventListener("resize", resize);
+  resize();
 }
 
 /* 4. REFINED RENDERING (Fixes Double Load & Particle Visibility) */
@@ -220,9 +219,7 @@ function renderStart() {
 
   // Show particles immediately on the start screen.
   GLOBAL_CANVAS.style.opacity = "1";
-  // Reset ramp so the cloud remains in steady breathing mode.
-  loadRampStart = 0;
-  loadRampDuration = 0;
+
 
   lastRenderedScreen = { type: "start", nodeIndex: -1 };
   APP.innerHTML = `
@@ -234,9 +231,6 @@ function renderStart() {
 }
 
 function renderLoad(node) {
-  // Begin the timed load/ramp only after the outgoing prayer has fully exited.
-  loadRampStart = Date.now();
-  loadRampDuration = node.durationMs || DEFAULT_LOAD_MS;
 
   APP.innerHTML = `<section class="screen" id="loadScreen"></section>`;
   lastRenderedScreen = { type: "load", nodeIndex: session.nodeIndex };
@@ -438,9 +432,6 @@ function startRound() {
 
 /* Initialize App */
 function init() {
-  const dpr = window.devicePixelRatio || 1;
-  GLOBAL_CANVAS.width = window.innerWidth * dpr;
-  GLOBAL_CANVAS.height = window.innerHeight * dpr;
   startLoadVisual(GLOBAL_CANVAS);
   flowNodes = buildFlowTimeline();
   renderStart();
