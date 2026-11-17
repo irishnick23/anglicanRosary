@@ -156,13 +156,13 @@ function home(message = "") {
   APP.innerHTML = `<section class="screen screen--start">
     <h1 class="title">The Daily Office</h1>
     <form class="office-picker">
+      <label class="office-date">Date<input type="date" name="date" required></label>
       <fieldset class="office-options"><legend>Choose an office</legend>
         ${Object.entries(offices).map(([key, name]) => `<label class="office-option">
           <input type="radio" name="office" value="${key}" aria-label="${name}">
           <span><svg viewBox="0 0 24 24" aria-hidden="true">${officeIcons[key]}</svg>${name.replace(" Prayer", "")}</span>
         </label>`).join("")}
       </fieldset>
-      <label class="office-date">Date<input type="date" name="date" required></label>
       <button type="submit" class="btn">Begin prayer</button>
     </form>
     <small class="source">Book of Common Prayer (2019) · <a href="https://www.dailyoffice2019.com/">Daily Office 2019</a></small>

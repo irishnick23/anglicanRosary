@@ -298,11 +298,11 @@ body::after {
 html, body { overflow-y: auto; }
 .screen--start { padding: max(48dvh, 12rem) 1rem 4dvh; gap: .7rem; }
 .office-picker {
-  width: min(100%, 27rem); display: grid; grid-template-columns: 1fr auto;
-  align-items: center; gap: 1rem; margin: .3rem 0 .5rem;
+  width: min(100%, 27rem); display: grid; justify-items: center;
+  gap: .9rem; margin: -.6rem 0 .5rem;
 }
 .office-options {
-  grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr);
+  width: 100%; display: grid; grid-template-columns: repeat(4, 1fr);
   min-width: 0; margin: 0; padding: 4px; border: 1px solid #33322f;
   border-radius: 15px; background: #101010;
 }
@@ -313,9 +313,9 @@ html, body { overflow-y: auto; }
 .office-option svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .office-option input:checked + span { background: #33322f; color: #faf5e9; box-shadow: inset 0 0 0 1px #484741; }
 .office-option input:focus-visible + span, .office-date input:focus-visible { outline: 2px solid #e3daca; outline-offset: 2px; }
-.office-date { display: grid; justify-items: start; text-align: left; font-size: .76rem; color: #aaa9a6; line-height: 1.25; }
+.office-date { display: inline-flex; align-items: center; gap: .6rem; font-size: .85rem; color: #aaa9a6; line-height: 1.25; }
 .office-date input { color-scheme: dark; background: transparent; color: #e0ded9; border: 0; padding: 0; max-width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 1rem; }
-.office-picker .btn { align-self: end; }
+.office-picker .btn { margin-top: .25rem; }
 @media (hover: hover) and (pointer: fine) {
   .office-option:hover input:not(:checked) + span { color: #f1eee8; background: #1c1c1b; }
 }
