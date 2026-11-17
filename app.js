@@ -143,8 +143,11 @@ function startLoadVisual(canvas) {
 
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const span = Math.min(canvas.width * 1.2, canvas.height * 1.35);
+    // Keep the original vertical silhouette while leaving air around both tips.
+    const verticalSpan = Math.min(canvas.width * 1.2, canvas.height * 1.35);
+    const span = Math.min(canvas.width * 0.86, verticalSpan);
     const scale = span / width;
+    const verticalScale = verticalSpan / width;
     const center = canvas.height * (session.status === "start" ? 0.39 : 0.5);
     ctx.globalCompositeOperation = "lighter";
     sheets.forEach((sheet, layer) => {
@@ -157,8 +160,8 @@ function startLoadVisual(canvas) {
           + Math.sin(u * 10 - phase - time * 0.09) * 0.025;
         const dx = Math.round(left + x * scale);
         ctx.drawImage(sheet, x, 0, 8, height, dx,
-          center + span * (bend + (layer - 2) * 0.018) - height * scale / 2,
-          Math.round(left + (x + 8) * scale) - dx, height * scale);
+          center + verticalSpan * (bend + (layer - 2) * 0.018) - height * verticalScale / 2,
+          Math.round(left + (x + 8) * scale) - dx, height * verticalScale);
       }
     });
   }
