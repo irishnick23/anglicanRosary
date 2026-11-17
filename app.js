@@ -121,6 +121,7 @@ function startLoadVisual(canvas) {
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   // Project grains from a softly lit volume into reusable layers.
   const resolution = 640;
+  const driftingGrains = [];
   const layers = Array.from({ length: 5 }, (_, layer) => {
     const texture = document.createElement("canvas");
     texture.width = texture.height = resolution;
@@ -142,7 +143,17 @@ function startLoadVisual(canvas) {
       const driftX = across * 1.08 + 0.18 * rise;
       const driftY = rise * (0.68 - 0.48 * across) - 0.18 * across
         + 0.045 * Math.sin(across * 9 + layer * 0.18);
-      paint.fillRect((0.5 + driftX) * resolution, (0.5 + driftY) * resolution, size, size);
+      const grainX = (0.5 + driftX) * resolution;
+      const grainY = (0.5 + driftY) * resolution;
+      if (i % 64 === 0) {
+        driftingGrains.push({
+          x: grainX, y: grainY, phase: Math.random() * Math.PI * 2,
+          speed: 0.17 + Math.random() * 0.24, reach: 9 + Math.random() * 19,
+          size: 1.65 + Math.random() * 1.2
+        });
+      } else {
+        paint.fillRect(grainX, grainY, size, size);
+      }
     }
     return texture;
   });
@@ -166,6 +177,16 @@ function startLoadVisual(canvas) {
       cloudPaint.drawImage(texture, -resolution / 2, -resolution / 2);
       cloudPaint.restore();
     });
+
+    // Persistent paths let the eye follow a grain as nearby grains pass it.
+    cloudPaint.fillStyle = "rgba(240,235,224,0.62)";
+    for (const grain of driftingGrains) {
+      const phase = grain.phase + time * grain.speed;
+      const x = grain.x + grain.reach * Math.sin(phase);
+      const y = grain.y + grain.reach * (0.42 * Math.cos(phase)
+        + 0.24 * Math.sin(phase * 1.7 + grain.x * 0.012));
+      cloudPaint.fillRect(x, y, grain.size, grain.size);
+    }
 
     // A broad swell travels across the grains. Align slice edges on device
     // pixels so adjacent columns stay joined throughout the breath.
