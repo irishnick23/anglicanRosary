@@ -37,8 +37,10 @@ html, body {
   pointer-events: none;
   opacity: 0;
   filter: blur(0.35px) contrast(1.14) brightness(1.06);
-  transition: opacity 3000ms var(--ghost-ease);
+  transition: opacity 350ms var(--ghost-ease);
 }
+
+#globalCloudCanvas.visible { opacity: 1; transition-duration: 1200ms; }
 
 body::after {
   display: none;
@@ -115,12 +117,12 @@ body::after {
 .prayer-text { font-size: clamp(1.02rem, 2.6vw, 1.25rem); font-weight: 300; letter-spacing: 0.05em; white-space: pre-line; }
 
 /* Ghost Ascent Animations */
-.stanza-wrap { animation: stanza-enter 1800ms var(--ghost-ease) both; min-height: 11rem; display: grid; align-content: center; }
+.stanza-wrap { animation: stanza-enter 180ms var(--ghost-ease) both; min-height: 11rem; display: grid; align-content: center; }
 .stanza--leaving { opacity: 0; transform: translateY(-20px); filter: blur(5px); transition: opacity 600ms ease-in, transform 600ms var(--ghost-ease); }
 
 @keyframes stanza-enter {
-  from { opacity: 0; filter: blur(10px); transform: translateY(20px); }
-  to { opacity: 1; filter: blur(0); transform: translateY(0); }
+  from { opacity: .7; }
+  to { opacity: 1; }
 }
 
 .bead-arc { display: flex; justify-content: center; gap: 0.42rem; margin-top: 0.5rem; }
@@ -327,4 +329,8 @@ html, body { overflow-y: auto; }
 .line-rubric, .line-citation, .line-subheading { color: #aaa; font-size: .88em; }
 .line-rubric { font-style: italic; }
 .line-congregation, .line-congregation_dialogue { color: #fff; }
-@media (prefers-reduced-motion: reduce) { .stanza-wrap { animation: none; } }
+.keyboard-navigation .stanza-wrap { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .stanza-wrap { animation: none; }
+  #globalCloudCanvas { transition: none; }
+}

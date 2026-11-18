@@ -105,7 +105,7 @@ function startLoadVisual(canvas) {
   function sync() {
     cancelAnimationFrame(frame);
     last = 0;
-    if (document.hidden || getComputedStyle(canvas).opacity === "0" && canvas.style.opacity === "0") return;
+    if (document.hidden || getComputedStyle(canvas).opacity === "0" && !canvas.classList.contains("visible")) return;
     draw();
     if (!reduced.matches) frame = requestAnimationFrame(tick);
   }
@@ -116,7 +116,7 @@ function startLoadVisual(canvas) {
     canvas.height = Math.round(canvas.clientHeight * dpr);
     sync();
   }
-  new MutationObserver(sync).observe(canvas, { attributes: true, attributeFilter: ["style"] });
+  new MutationObserver(sync).observe(canvas, { attributes: true, attributeFilter: ["class"] });
   canvas.addEventListener("transitionend", sync);
   document.addEventListener("visibilitychange", sync);
   reduced.addEventListener("change", sync);
@@ -152,7 +152,7 @@ function home(message = "") {
   clearTimeout(pauseTimer);
   activeRequest?.abort();
   session.status = "start";
-  GLOBAL_CANVAS.style.opacity = "1";
+  GLOBAL_CANVAS.classList.add("visible");
   APP.innerHTML = `<section class="screen screen--start">
     <h1 class="title">The Daily Office</h1>
     <form class="office-picker">
@@ -275,7 +275,7 @@ async function beginOffice() {
 
 function showPrayer() {
   session.status = "prayer";
-  GLOBAL_CANVAS.style.opacity = "0";
+  GLOBAL_CANVAS.classList.remove("visible");
   const page = pages[index];
   APP.innerHTML = `<section class="screen screen--prayer">
     <div class="prayer-main"><header><span class="meta"></span><h2 class="prayer-title"></h2></header>
@@ -301,10 +301,10 @@ function next() {
   if (index >= pages.length) return home("Office complete.");
   if (pages[index].section === pages[index - 1].section) return showPrayer();
   session.status = "pause";
-  GLOBAL_CANVAS.style.opacity = "1";
+  GLOBAL_CANVAS.classList.add("visible");
   APP.innerHTML = '<section class="screen screen--start"><p class="meta"></p><button class="quiet" data-skip>Continue</button></section>';
   APP.querySelector(".meta").textContent = pages[index].section;
-  pauseTimer = setTimeout(showPrayer, 7140);
+  pauseTimer = setTimeout(showPrayer, 5000);
 }
 APP.addEventListener("click", event => {
   if (event.target.closest("[data-skip]")) { clearTimeout(pauseTimer); return showPrayer(); }
@@ -313,7 +313,9 @@ APP.addEventListener("click", event => {
   if (event.target.closest("[data-back]")) { if (index > 0) { index--; showPrayer(); } }
   else if (!window.getSelection()?.toString()) next();
 });
+window.addEventListener("pointerdown", () => document.documentElement.classList.remove("keyboard-navigation"));
 window.addEventListener("keydown", event => {
+  document.documentElement.classList.add("keyboard-navigation");
   if (session.status !== "prayer" || event.repeat || event.target.closest("button")) return;
   if ([" ", "Enter", "ArrowRight"].includes(event.key)) { event.preventDefault(); next(); }
 });
